@@ -115,7 +115,10 @@ handleName = function(name:string, player : Player, ProximityPrompt)
 		
 		if playerCoins >= CaseProperties.CoinPrices.NormalCase then
 			local caseItem = getCaseItem(player)
+			DataManager.SubtractCoins(player, CaseProperties.CoinPrices.NormalCase)
 			GachaUIEvent:FireClient(player, caseItem, "NormalCase", ProximityPrompt)
+			DataManager.SendCurrencies(player)
+			SFXEvent:FireClient(player, "Purchase")
 			
 		elseif playerCoins < CaseProperties.CoinPrices.NormalCase then
 			ProductEvent:FireClient(player, "case","NoMoneyNormal")
@@ -138,18 +141,21 @@ handleTime = function(action:string, player:Player)
 		
 		local isMember = isGroupMember(player)
 		SFXEvent:FireClient(player, "ReceiveRewardChestCase")
+		SFXEvent:FireClient(player, "Coin")
 		
 		if isMember then
 			local time = os.time()
 			DataManager.setClaim(player, time)
 			CaseModule:HandleChestUI(player)
 			DataManager.AddCoins(player, CaseProperties.ChestReward * 2)
+			DataManager.SendCurrencies(player)
 			
 		else
 			local time = os.time()
 			DataManager.setClaim(player, time)
 			CaseModule:HandleChestUI(player)
 			DataManager.AddCoins(player, CaseProperties.ChestReward)
+			DataManager.SendCurrencies(player)
 		end
 		-- HANDLE REWARDS & TIME FOR GUI HERE
 		
@@ -157,6 +163,7 @@ handleTime = function(action:string, player:Player)
 		ProductEvent:FireClient(player, "case", "SkipChestTimer")
 		SFXEvent:FireClient(player, "Error")
 	else 
+		SFXEvent:FireClient(player, "Error")
 		warn("Invalid Action | GetTime")
 	end
 	

@@ -162,10 +162,19 @@ function MusicModule:PlaySFX(sfxType : string)
 		sfx = d.SFXFolder:WaitForChild("Coin")
 		sfx.Volume = 2
 		if sfx then sfx:Play() end
+	elseif sfxType == "Purchase" then
+		sfx = d.SFXFolder.Purchase
+		sfx.Volume = 2
+		if sfx then sfx:Play() end
+	elseif sfxType == "Purchase2" then
+		sfx = d.SFXFolder.Purchase2
+		sfx.Volume = 2
+		if sfx then sfx:Play() end
 
 
 		--------- DEATH FX -----------
 
+	-- Note : For the SFXType, always make sure it's the name of what the player currently equipped	
 	elseif sfxType == "Explosion" then
 		sfx = d.DeathSFXFolder.Explode
 		sfx.Volume = 1
