@@ -276,71 +276,54 @@ local Data = {
 }
 
 function ShopUI:NormalPurchase(Name)
-	
-	print(Name)
-	
-	if Name then
-		d.MarketPlaceService:promptProductPurchase(d.localPlayer, self.Products.DevProducts[Name])
+	if not Name then return end
 
-		Data.ReceivingPlayer = self.SelectedPlayer
-		Data.ProductToGift = self.Products.DevProducts[Name]
-		Data.ProductName = "x1 Case"
+	local productId = self.Products.DevProducts[Name]
+	if productId then
+		-- 1. Create LOCAL data so it doesn't overwrite other clicks
+		local localData = {
+			ReceivingPlayer = d.localPlayer, -- Me
+			ProductToGift = productId,
+			ProductName = Name,
+		}
 
-		d.ProductEvent:FireServer("Gifting",Data)
+		-- 2. Tell the server to expect a purchase for ME
+		d.ProductEvent:FireServer("Normal", localData) 
+
+		-- 3. Trigger the actual purchase window
+		d.MarketPlaceService:PromptProductPurchase(d.localPlayer, productId)
 	end
 end
 
 function ShopUI:GiftPurchase(Name)
-	
-	if Name == "1Case" then
-		
-		if self.SelectedPlayer ~= nil then
-			d.MarketPlaceService:PromptProductPurchase(d.localPlayer, self.Products.DevProducts.x1Case)
-			
-			Data.ReceivingPlayer = self.SelectedPlayer
-			Data.ProductToGift = self.Products.DevProducts.x1Case
-			Data.ProductName = "x1 Case"
-			
-			d.ProductEvent:FireServer("Gifting",Data)
-		end
-		
-		-- CHECK FIRST IF PLAYER HAVE CLICKED A GIFT PLAYER IF NOT THEN REJECT!
-	elseif Name == "2Case" then
-		
-		if self.SelectedPlayer ~= nil then
-			d.MarketPlaceService:PromptProductPurchase(d.localPlayer, self.Products.DevProducts.x2Case)
+	if not Name then return end
 
-			Data.ReceivingPlayer = self.SelectedPlayer
-			Data.ProductToGift = self.Products.DevProducts.x2Case
-			Data.ProductName = "x2 Case"
-
-			d.ProductEvent:FireServer("Gifting",Data)
-		end
-	
-	elseif Name == "3Case" then
-		if self.SelectedPlayer ~= nil then
-			d.MarketPlaceService:PromptProductPurchase(d.localPlayer, self.Products.DevProducts.x3Case)
-
-			Data.ReceivingPlayer = self.SelectedPlayer
-			Data.ProductToGift = self.Products.DevProducts.x3Case
-			Data.ProductName = "x3 Case"
-
-			d.ProductEvent:FireServer("Gifting",Data)
-		end
-	elseif Name == "VIP" then
-		if self.SelectedPlayer ~= nil then
-			d.MarketPlaceService:PromptProductPurchase(d.localPlayer, self.Products.DevProducts.VIP)
-
-			Data.ReceivingPlayer = self.SelectedPlayer
-			Data.ProductToGift = self.Products.DevProducts.VIP
-			Data.ProductName = "VIP"
-
-			d.ProductEvent:FireServer("Gifting",Data)
-		end
-	else
-		warn("INVALID CASES NAME | @GiftCase")
+	-- Safety Check: Make sure someone is selected
+	if self.SelectedPlayer == nil then
+		-- You might want to trigger your ErrorMessage UI here
+		warn("No player selected for gifting!")
+		return 
 	end
-	
+
+	local productId = self.Products.DevProducts[Name]
+	if productId then
+		-- 1. Fresh LOCAL table
+		local giftData = {
+			ReceivingPlayer = self.SelectedPlayer,
+			ProductToGift = productId,
+			ProductName = Name
+		}
+
+		-- 2. Tell server who the target is
+		d.ProductEvent:FireServer("Gifting", giftData)
+
+		-- 3. Prompt purchase
+		d.MarketPlaceService:PromptProductPurchase(d.localPlayer, productId)
+
+		-- 4. OPTIONAL: Clear selection so they have to click a name again for the next gift
+		self.SelectedPlayer = nil
+		-- (Add code here to reset the player list button colors to white)
+	end
 end
 
 

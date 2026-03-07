@@ -23,6 +23,7 @@ Directory.Modules = Directory.ServerStorage:WaitForChild("Modules")
 Directory.Events = Directory.ReplicatedStorage:WaitForChild("Events")
 Directory.Templates = Directory.ServerStorage:WaitForChild("Templates")
 Directory.MapTemplateFolder = Directory.Templates:WaitForChild("Map")
+Directory.DeathSFXFolder = Directory.SFXFolder:WaitForChild("DeathFX")
 
 -- Events
 Directory.SFXEvent = Directory.Events:WaitForChild("SFXEvent")

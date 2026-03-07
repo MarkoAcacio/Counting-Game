@@ -1,5 +1,7 @@
 local ShopHandler = {}
 
+local d = require(game:GetService("ServerStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
+
 -- Services
 local PlayerService = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -49,7 +51,10 @@ function ShopHandler:ConnectEvents()
 		if action == "Gifting" then
 			if data.ReceivingPlayer and data.ProductToGift then
 				ShopHandler.PendingGifts[player.UserId] = data
+				print(data)
 			end
+		elseif action == "Normal" then
+			ShopHandler.PendingGifts[player.UserId] = nil
 		end
 	end)
 end
@@ -80,7 +85,8 @@ function ShopHandler:SetupReceipts()
 				local ProductName = self.PendingGifts[buyerID].ProductName
 				
 				if productID == ProductToGift then
-					self:RewardGiftedPlayer(receivingPlayer, ProductName, buyerID)
+					self:RewardGiftedPlayer(receivingPlayer, ProductName, buyerID, productID)
+					self.PendingGifts[buyerID] = nil
 				end
 			else  -- NORMAL PURCHASE
 				ShopHandler:RewardPlayer(buyerID, productID)
@@ -110,31 +116,45 @@ function ShopHandler:RewardPlayer(PlayerID, ProductID)
 		caseIncrement = nil
 	}
 	
+	local player = PlayerService:GetPlayerByUserId(PlayerID)
+	print(player)
+	
 	if ProductID == ShopProperties.DevProducts.SkipTime then  -- Skip Chest Time
-		DataManager.setClaim(PlayerService:GetPlayerByUserId(PlayerID), 3)
+		DataManager.setClaim(player, 3)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.coin1 then
-		DataManager.AddCoins(PlayerService:GetPlayerByUserId(PlayerID), 500)
+		DataManager.AddCoins(player, 500)
+		DataManager.SendCurrencies(player)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.coin2 then
-		DataManager.AddCoins(PlayerService:GetPlayerByUserId(PlayerID), 1200)
+		DataManager.AddCoins(player, 1200)
+		DataManager.SendCurrencies(player)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.coin3 then
-		DataManager.AddCoins(PlayerService:GetPlayerByUserId(PlayerID), 2500)
+		DataManager.AddCoins(player, 2500)
+		DataManager.SendCurrencies(player)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.x1Case then
 		caseData.caseIncrement = 1
-		InventoryHandler:AddToInventory(PlayerService:GetPlayerByUserId(PlayerID), "case", caseData)
+		InventoryHandler:AddToInventory(player, "case", caseData)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.x2Case then
 		caseData.caseIncrement = 2
-		InventoryHandler:AddToInventory(PlayerService:GetPlayerByUserId(PlayerID), "case", caseData)
+		InventoryHandler:AddToInventory(player, "case", caseData)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.x3Case then
 		caseData.caseIncrement = 3
-		InventoryHandler:AddToInventory(PlayerService:GetPlayerByUserId(PlayerID), "case", caseData)
+		InventoryHandler:AddToInventory(player, "case", caseData)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	end
 	
 end
 
-function ShopHandler:RewardGiftedPlayer(ReceivingPlayer, ProductName, BuyerId)
+function ShopHandler:RewardGiftedPlayer(ReceivingPlayer, ProductName, BuyerId, ProductID)
+	local receiverID = (typeof(ReceivingPlayer) == "Instance") and ReceivingPlayer.UserId or ReceivingPlayer
 	
 	local Text = "You Have Received, " .. ProductName .. " From : " .. PlayerService:GetPlayerByUserId(BuyerId).Name .. " !!!"
-	
+	self:RewardPlayer(receiverID,  ProductID)
 	NotificationsEvent:FireClient(ReceivingPlayer, Text)
 end
 
