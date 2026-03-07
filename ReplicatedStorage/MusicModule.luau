@@ -109,10 +109,10 @@ function MusicModule:PlayMusic(musicType : string)
 	
 end
 
-
 function MusicModule:PlaySFX(sfxType : string)
 	
 	repeat task.wait() until isLoaded == true
+
 
 	if sfxType == "Error" then
 		sfx = d.SFXFolder:WaitForChild("error")
@@ -162,6 +162,16 @@ function MusicModule:PlaySFX(sfxType : string)
 		sfx = d.SFXFolder:WaitForChild("Coin")
 		sfx.Volume = 2
 		if sfx then sfx:Play() end
+
+
+		--------- DEATH FX -----------
+
+	elseif sfxType == "Explosion" then
+		sfx = d.DeathSFXFolder.Explode
+		sfx.Volume = 1
+	if sfx then sfx:Play() end
+
+
 	end
 	
 end

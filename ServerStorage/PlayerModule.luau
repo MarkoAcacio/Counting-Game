@@ -74,8 +74,11 @@ function PlayerModule:Init()
 
 			-- Player Death
 			hum.Died:Connect(function()
-				
-			ParticleHandler:Show(playerCharacter, "Explosion")				
+			
+			-------------------------------------------------- Change in the future to what the player has equipped.
+			ParticleHandler:Show(playerCharacter, "Explosion")	
+			SFXEvent:FireClient(player, "Explosion") 
+			--------------------------------------------------				
 
 				if self.Players[player] then
 					self.Players[player].Alive = false

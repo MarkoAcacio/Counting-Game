@@ -1,0 +1,17 @@
+{
+    "luau-lsp.sourcemap.rojoProjectFile": "",
+    "luau-lsp.completion.imports.stringRequires.enabled": false,
+    "luau-lsp.completion.imports.requireStyle": "auto",
+    "luau-lsp.sourcemap.autogenerate": false,
+    "luau-lsp.sourcemap.enabled": false,
+    "luau-lsp.plugin.enabled": true,
+    "luau-lsp.plugin.port": 3667,
+    "luau-lsp.platform.type": "Roblox",
+    "luau-lsp.require.mode": "relative",
+    "luau-lsp.diagnostics.ignoredErrors": [
+        "UnknownRequire",
+        "1012",
+        "1011"
+    ],
+    "luau-lsp.plugin.enabled": true
+}
