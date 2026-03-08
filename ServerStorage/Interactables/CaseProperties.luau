@@ -2,13 +2,26 @@ local CaseProperties = {}
 
 CaseProperties["Items"] = {
 	Death = {
-		["Void"] = 00,
+		["Elevate"] = 121885146499014,
+		["Minecraft"] = 116941381075668
 	}, 
 	Emotes = {
-		["Kneel"] = 90964023895915,
-		["Crouch"] = 108926550267329,
+		["67"] = 79180445676225,
+		["LowCortisol"] = 87567280757105,
+		["HaiDi"] = 83421797309983,
 	}, 
+	Count = {
+		["Pose3"] = 115818106602857,
+		["Yay"] = 113451589990535,
+		["PinoyCrouch"] = 108549287750033,
+	},
+	Images = {
+		["t1"] = 8508980536,
+		["t2"] = 4575171289
+	}
 }
+
+-- ["Jojo"] = 103201215781653,  -- Make this premium.
 
 CaseProperties["Chances"] = {
 	Death = 50,
@@ -16,8 +29,9 @@ CaseProperties["Chances"] = {
 }
 
 CaseProperties["CoinPrices"] = {
-	NormalCase = 500,
-	PremiumCAse = 1299
+	NormalCase = 499,
+	PremiumCAse = 1299,
+	ImageCase = 399
 }
 
 CaseProperties["RewardCooldown"] = 43200

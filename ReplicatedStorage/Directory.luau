@@ -39,6 +39,7 @@ Directory.DailyEvent = Directory.Events:WaitForChild("DailyEvent")
 Directory.EmoteChange = Directory.Events:WaitForChild("EmoteChange")
 Directory.EmoteRequest = Directory.Events:WaitForChild("EmoteRequest")
 Directory.CurrencyEvent = Directory.Events:WaitForChild("CurrencyEvent")
+Directory.SaveEmoteSlot = Directory.Events:WaitForChild("SaveEmoteSlot")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

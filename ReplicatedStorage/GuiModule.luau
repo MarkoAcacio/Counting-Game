@@ -283,12 +283,6 @@ HandleCaseChestName = function(name, meshPart, cooldown)
 		else
 			warn("UI ERROR | GUI MODULE REWARD CHEST")
 		end
-	elseif name == "NormalCase" then
-
-	elseif name == "PremiumCase" then
-
-	else
-		warn("Invalid Case Name")
 	end
 end
 

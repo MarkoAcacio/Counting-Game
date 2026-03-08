@@ -130,7 +130,6 @@ function GachaUI.CloneTemplate(ItemTemplate : Frame, ScrollingFrame : ScrollingF
 	local counter = 0
 	local rewardFrame = nil
 	
-	
 
 	while counter <= numberOfTemplates do
 		local clone = ItemTemplate:Clone()
