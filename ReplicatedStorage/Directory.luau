@@ -19,6 +19,7 @@ Directory.Events = Directory.ReplicatedStorage:WaitForChild("Events")
 Directory.SoundsFolder = Directory.SoundService:WaitForChild("Sounds")
 Directory.MusicFolder = Directory.SoundsFolder:WaitForChild("Music")
 Directory.SFXFolder = Directory.SoundsFolder:WaitForChild("SFX")
+Directory.DeathSFXFolder = Directory.SFXFolder:WaitForChild("DeathFX")
 
 -- Events
 Directory.SFXEvent = Directory.Events:WaitForChild("SFXEvent")
@@ -38,6 +39,7 @@ Directory.DailyEvent = Directory.Events:WaitForChild("DailyEvent")
 Directory.EmoteChange = Directory.Events:WaitForChild("EmoteChange")
 Directory.EmoteRequest = Directory.Events:WaitForChild("EmoteRequest")
 Directory.CurrencyEvent = Directory.Events:WaitForChild("CurrencyEvent")
+Directory.SaveEmoteSlot = Directory.Events:WaitForChild("SaveEmoteSlot")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

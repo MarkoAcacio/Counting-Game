@@ -23,6 +23,7 @@ Directory.Modules = Directory.ServerStorage:WaitForChild("Modules")
 Directory.Events = Directory.ReplicatedStorage:WaitForChild("Events")
 Directory.Templates = Directory.ServerStorage:WaitForChild("Templates")
 Directory.MapTemplateFolder = Directory.Templates:WaitForChild("Map")
+Directory.DeathSFXFolder = Directory.SFXFolder:WaitForChild("DeathFX")
 
 -- Events
 Directory.SFXEvent = Directory.Events:WaitForChild("SFXEvent")
@@ -42,6 +43,7 @@ Directory.DailyEvent = Directory.Events:WaitForChild("DailyEvent")
 Directory.EmoteRequest = Directory.Events:WaitForChild("EmoteRequest")
 Directory.CurrencyEvent = Directory.Events:WaitForChild("CurrencyEvent")
 Directory.RoundEvent = Directory.Events:WaitForChild("RoundEvent")
+Directory.SaveEmoteSlot = Directory.Events:WaitForChild("SaveEmoteSlot")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

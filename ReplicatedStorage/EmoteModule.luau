@@ -59,10 +59,10 @@ function EmoteModule:Init()
 	local function onCharAdded(char)
 		local hum = char:WaitForChild("Humanoid")
 		-- Update Directory references if needed
-		print("Reloading EmoteModule")
 		self:SetupData()
 		self:SetupViewports()
 		self:SetupButtons()
+		self:ChangeEmoteListener()
 
 		hum.StateChanged:Connect(self.OnStateChange)
 	end
@@ -89,42 +89,65 @@ function EmoteModule:Init()
 	end)
 end
 
+function EmoteModule:RefreshUI()
+	-- Clear only UI-specific items
+	for _, Emotes in ipairs(self.PreviewEmotes) do
+		Emotes:Stop()
+	end
+	table.clear(self.PreviewEmotes)
 
-function EmoteModule:ChangeEmoteListener()  -- For inventory not saves etc.
-	
+	for _, Button in ipairs(self.EmoteButtons) do
+		-- Don't Destroy the button if it's part of the UI permanently!
+		-- Just disconnect the old events.
+	end
+	table.clear(self.EmoteButtons)
+
+	-- Rebuild the visuals
+	self:SetupViewports()
+	self:SetupButtons()
+end
+
+function EmoteModule:ChangeEmoteListener()
 	table.insert(conn, d.EmoteChange.Event:Connect(function()
 		local data = InventoryUI.EquipEmote
-		
-		self.CurrentEmotes[data.slotName].animID = data.emoteID
-		self.CurrentEmotes[data.slotName].animName = data.emoteName
-		
-		cleanUp()
-		
-		self:Init()
-		
-		print("Resetting")
+
+		-- 1. Update the data
+		if self.CurrentEmotes[data.slotName] then
+			self.CurrentEmotes[data.slotName].animID = data.emoteID
+			self.CurrentEmotes[data.slotName].animName = data.emoteName
+		end
+
+		-- 2. Clean up ONLY the visual connections/previews, NOT the main listeners
+		self:RefreshUI() 
+
+		print("Emote Wheel Visuals Reset")
 	end))
-	
 end
+
 
 
 function EmoteModule:SetupData()
-	-- Make a request to the server. then update the current emotes.
-	
-	local data = d.EmoteRequest:InvokeServer()  -- Make connection / listener first then fire server.
-		
-		local count = 0
-		
-		if data then
-			for key, value in pairs(data) do
-				count += 1
-				self.CurrentEmotes["Emote"..tostring(count)].animID = value
-				self.CurrentEmotes["Emote"..tostring(count)].animName = key
-				
+	-- This waits for the Server to return the 'EmoteConfig' table
+	local data = d.EmoteRequest:InvokeServer() 
+
+	if data and next(data) ~= nil then
+		print("Client received saved EmoteConfig!")
+
+		-- Loop through the saved slots (Emote1, Emote2, etc.)
+		for slotName, emoteInfo in pairs(data) do
+			if self.CurrentEmotes[slotName] then
+				-- We use emoteInfo.EmoteID because that's how it's named in your template
+				self.CurrentEmotes[slotName].animID = emoteInfo.EmoteID
+				self.CurrentEmotes[slotName].animName = emoteInfo.EmoteName
 			end
 		end
+	else
+		-- If no data was saved, set default empty slots
+		for i = 1, 4 do
+			self.CurrentEmotes["Emote"..i] = {animID = 0, animName = "Emote"}
+		end
+	end
 end
-
 
 ------------------------------------------------------------------------------------------------------------
 

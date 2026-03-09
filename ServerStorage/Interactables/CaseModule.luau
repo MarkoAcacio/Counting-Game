@@ -34,6 +34,7 @@ local handlePurchase -- Purchasing for cases
 local handleName
 
 local getCaseItem -- Either Emote or Death
+local getCaseImage -- Rewards image cosmetic
 
 local checkPlayerCoins
 
@@ -111,11 +112,14 @@ handleName = function(name:string, player : Player, ProximityPrompt)
 		
 		local playerCoins = checkPlayerCoins(player)
 		
-		-- CHECK FIRST IF PLAYER HAS NORMAL CASE PENDING OR NO
+		-- CHECK FIRST IF PLAYER HAS NORMAL CASE PENDING FROM GAMEPASS OR NO
 		
 		if playerCoins >= CaseProperties.CoinPrices.NormalCase then
 			local caseItem = getCaseItem(player)
+			DataManager.SubtractCoins(player, CaseProperties.CoinPrices.NormalCase)
 			GachaUIEvent:FireClient(player, caseItem, "NormalCase", ProximityPrompt)
+			DataManager.SendCurrencies(player)
+			SFXEvent:FireClient(player, "Purchase")
 			
 		elseif playerCoins < CaseProperties.CoinPrices.NormalCase then
 			ProductEvent:FireClient(player, "case","NoMoneyNormal")
@@ -124,6 +128,22 @@ handleName = function(name:string, player : Player, ProximityPrompt)
 		
 	elseif name == "PremiumCase" then
 		
+	elseif name == "ImageCase" then	
+		local playerCoins = checkPlayerCoins(player)
+
+		if playerCoins >= CaseProperties.CoinPrices.ImageCase then
+			local imageItem = getCaseImage(player)
+			print(imageItem)
+			
+			DataManager.SubtractCoins(player, CaseProperties.CoinPrices.NormalCase)
+			GachaUIEvent:FireClient(player, imageItem, "ImageCase", ProximityPrompt)
+			DataManager.SendCurrencies(player)  -- Refresh UI
+			SFXEvent:FireClient(player, "Purchase")
+			
+		elseif playerCoins < CaseProperties.CoinPrices.NormalCase then
+			ProductEvent:FireClient(player, "case","NoMoneyNormal")
+			SFXEvent:FireClient(player, "Error")
+		end
 	else
 		warn("Invalid Case Name")
 	end
@@ -138,18 +158,21 @@ handleTime = function(action:string, player:Player)
 		
 		local isMember = isGroupMember(player)
 		SFXEvent:FireClient(player, "ReceiveRewardChestCase")
+		SFXEvent:FireClient(player, "Coin")
 		
 		if isMember then
 			local time = os.time()
 			DataManager.setClaim(player, time)
 			CaseModule:HandleChestUI(player)
 			DataManager.AddCoins(player, CaseProperties.ChestReward * 2)
+			DataManager.SendCurrencies(player)
 			
 		else
 			local time = os.time()
 			DataManager.setClaim(player, time)
 			CaseModule:HandleChestUI(player)
 			DataManager.AddCoins(player, CaseProperties.ChestReward)
+			DataManager.SendCurrencies(player)
 		end
 		-- HANDLE REWARDS & TIME FOR GUI HERE
 		
@@ -157,6 +180,7 @@ handleTime = function(action:string, player:Player)
 		ProductEvent:FireClient(player, "case", "SkipChestTimer")
 		SFXEvent:FireClient(player, "Error")
 	else 
+		SFXEvent:FireClient(player, "Error")
 		warn("Invalid Action | GetTime")
 	end
 	
@@ -171,6 +195,45 @@ end
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
+local function determineReward(player, category)
+	local items = CaseProperties.Items[category]
+	local itemNames = {}
+
+	for itemName, itemID in pairs(items) do
+		table.insert(itemNames, itemName)
+	end
+
+	local selectedItem = itemNames[math.random(1, #itemNames)]
+
+	local data = {}
+
+	if category == "Emotes" then
+		data = {
+			EmoteName = selectedItem,
+			EmoteID = items[selectedItem]
+		}
+		InventoryHandler:AddToInventory(player, "emote", data)	
+	elseif category == "Images" then
+		data = {
+			ImageName = selectedItem,
+			ImageID = items[selectedItem]
+		}
+		InventoryHandler:AddToInventory(player, "image", data)
+	end
+	
+	return selectedItem
+end
+
+getCaseImage = function(player)
+	local category = "Images"
+	return determineReward(player, category)
+end
+
+--[[
+==================================================================================================
+	UPDATE CASE ITEM TO CATER DIFFERENT CATEGORIES. ( just use random on them. )
+==================================================================================================
+]]
 getCaseItem = function(player)
 	
 	local category = "Emotes"
@@ -180,24 +243,9 @@ getCaseItem = function(player)
 		category = "Death"
 	end ]]--
 	
-
 	local items = CaseProperties.Items[category]
-	local itemNames = {}
-	for itemName, itemID in pairs(items) do
-		table.insert(itemNames, itemName)
-	end
-	
-	local selectedItem = itemNames[math.random(1, #itemNames)]
-	
-	
-	local data = {
-		EmoteName = selectedItem,
-		EmoteID = items[selectedItem]
-	}	
-	
-	InventoryHandler:AddToInventory(player, "emote", data)
-	
-	return selectedItem
+
+	return determineReward(player, category)
 	
 end
 

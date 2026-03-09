@@ -93,11 +93,13 @@ function InventoryUI:HandleListeners(InventoryBtn : ImageButton, InventoryFrame 
 
 	----------------------------Remote Events ( Receive Data )---------------------------------
 
+	-- DATA passes the inventory table itself.
 	table.insert(self.Connections, d.InventoryEvent.OnClientEvent:Connect(function(data)
 		if isLoaded then
 			self:parseData(data)
 			self:UpdateInventory()
 		else
+			print(data)
 			self:parseData(data)
 			isLoaded = true
 		end
@@ -180,16 +182,26 @@ function InventoryUI:_Buttons()
 		for _, child in ipairs(Slot:GetChildren()) do
 			
 			-- Handle Equip...
+			-- Inside InventoryUI:_Buttons()
 			if child:IsA("TextButton") then
 				table.insert(self._ButtonConn, child.MouseButton1Click:Connect(function()
+					local slotName = "Emote"..child.Name -- e.g., "Emote1"
+					local emoteName = buttons.Parent.Name
+					local emoteID = self.EmoteClones[emoteName].emoteID
+
+					-- 1. Update local UI immediately
 					self.EquipEmote = {
-						slotName = "Emote"..child.Name,
-						emoteName = buttons.Parent.Name,
-						emoteID = self.EmoteClones[buttons.Parent.Name].emoteID,
+						slotName = slotName,
+						emoteName = emoteName,
+						emoteID = emoteID,
 					}
-					
-					d.EmoteChange:Fire()
-					
+					d.EmoteChange:Fire() 
+
+					-- 2. Tell the server to SAVE it to the EmoteConfig template
+					d.SaveEmoteSlot:FireServer(slotName, emoteName, emoteID)
+
+					MusicModule.PlaySFX("Click")
+					buttons.Parent.Slot.Visible = false
 				end))
 			end
 			

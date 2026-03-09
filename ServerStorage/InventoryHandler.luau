@@ -39,6 +39,10 @@ function InventoryHandler:AddToInventory(player : Player, action, reward)
 	elseif action == "case" then
 		DataManager.AddPlayerInventory(player, action, reward)
 		self:UpdateInventory(player)
+	elseif action == "image" then -- UNFINISHED. NOT YET HANDLED REWARDING SO THIS IS USELESS FOR NOW. REFER TO CASEMODULE TO SETUP REWARDS.
+		print("image")
+		DataManager.AddPlayerInventory(player, action, reward)
+		self:UpdateInventory(player)
 	end
 end
 
@@ -48,14 +52,26 @@ function InventoryHandler:SetupListeners()
 		self:VerifyOwnership(player, EmoteID)
 	end))
 	
-	table.insert(self.connections, d.InventoryEvent.OnServerEvent:Connect(function()
-		
-	end))
+	d.SaveEmoteSlot.OnServerEvent:Connect(function(player, slotName, emoteName, emoteID)
+		-- Security: Check if they actually own the emote before saving the slot
+		local inventory = DataManager.GetPlayerInventory(player)
+		if inventory.Emotes[emoteName] then
+			DataManager.SaveEmoteSlot(player, slotName, emoteName, emoteID)
+		else
+			warn(player.Name .. " tried to equip an unowned emote!")
+		end
+	end)
 	
 	d.EmoteRequest.OnServerInvoke = function(player)
-		local inventory = DataManager.GetPlayerInventory(player)
-
-		return inventory.Emotes
+			local profile = DataManager.WaitForProfile(player)
+			
+			if profile and profile.Data.EmoteConfig then
+				print("Server sending EmoteConfig to Client for: " .. player.Name)
+				return profile.Data.EmoteConfig -- This sends the SAVED slots
+			else
+				print("No EmoteConfig found, sending empty table")
+				return {} 
+			end
 	end
 end
 
@@ -80,19 +96,25 @@ end
 function InventoryHandler:UpdateInventory(player : Player)
 	local NumberOfEmotes = 0
 	local NumberOfCases = 0
+	local NumberOfImages = 0
 	local inventory = DataManager.GetPlayerInventory(player)
 	
 	if inventory then
 		for _ in pairs(inventory.Emotes) do
 			NumberOfEmotes += 1
 		end
+		for _ in pairs(inventory.CountImages) do
+			NumberOfImages+= 1
+		end
+		
+		
 		NumberOfCases = _NumberOfCases
 	end
 
 	
 	local data = {
 		Inventory = inventory,
-		Slots = {emoteSlots = NumberOfEmotes, caseSlots = NumberOfCases},
+		Slots = {emoteSlots = NumberOfEmotes, caseSlots = NumberOfCases, countImages = NumberOfImages},
 		totalSlots = NumberOfEmotes + NumberOfCases
 	}
 	
