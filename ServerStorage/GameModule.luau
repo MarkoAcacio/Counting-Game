@@ -296,6 +296,7 @@ function GameModule:SetCountingUI(player:Player, action : string , roundType : n
 	clonedCountingUI.Enabled = true
 
 	countText = clonedCountingUI:FindFirstChild("CountText")
+	local countImg  = clonedCountingUI:FindFirstChild("img")
 	if not countText then return end
 
 	if action == "inc" then
@@ -306,6 +307,11 @@ function GameModule:SetCountingUI(player:Player, action : string , roundType : n
 			highlight.FillColor = Color3.fromRGB(126, 255, 126)
 			highlight.FillTransparency = 0.7
 			highlight.Parent = char
+						
+			-- print(ModulesFolder.Configs.ImageProperties.ImagesChildData.t2[self.numberCount])
+			
+			-- countImg.Image = ModulesFolder.Configs.ImageProperties.ImagesChildData.t2[self.numberCount]
+			
 		elseif roundType == 2 then -- LAST STAND
 			countText.Text = tostring(self.finalStandClicks[player].count)
 		end

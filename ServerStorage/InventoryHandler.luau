@@ -7,8 +7,27 @@ InventoryHandler.connections = {}
 
 -- The amount of case the game has.
 local _NumberOfCases = 2
+local vipID = 3534903128
 
 --------------------------------------------------------------------------------------------------------
+
+function InventoryHandler:IsVIP(player)
+	local currentVipStatus = player:GetAttribute("IsVIP")
+
+	if currentVipStatus == nil then
+		-- 2. It doesn't exist, so we check ownership and create it
+		local success, hasPass = pcall(function()
+			return d.MarketplaceService:UserOwnsGamePassAsync(player.UserId, vipID)
+		end)
+
+		-- Set the attribute for the first time
+		player:SetAttribute("IsVIP", success and hasPass or false)
+		
+		if success and hasPass then return true
+		else return false
+		end
+	end
+end
 
 function InventoryHandler:Init(player)
 	self:SetupListeners()
@@ -73,6 +92,7 @@ function InventoryHandler:SetupListeners()
 				return {} 
 			end
 	end
+	
 end
 
 function InventoryHandler:VerifyOwnership(player : Player, ItemID)

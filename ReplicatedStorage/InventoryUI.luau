@@ -5,6 +5,7 @@ local MusicModule = require(d.Modules:WaitForChild("MusicModule"))
 
 InventoryUI.OpenButtons = {}
 InventoryUI.EquipButtons = {}
+InventoryUI.EquipImageBtn = {}
 InventoryUI.Connections = {}
 InventoryUI._ButtonConn = {}
 InventoryUI.Data = {}
@@ -17,9 +18,11 @@ InventoryUI.NumOfEmotes = 0  -- TEMPLATES
 InventoryUI.NumOfCases = 0  -- TEMPLATES
 InventoryUI.CaseData = {}  -- TEMPLATES
 InventoryUI.EmoteData = {}  -- TEMPLATES
+InventoryUI.ImageData = {}  -- TEMPLATES
 
 InventoryUI.CaseClones = {}
 InventoryUI.EmoteClones = {}
+InventoryUI.ImageClones = {}
 
 local _emoteTemplate
 
@@ -71,6 +74,7 @@ end
 
 function InventoryUI:parseData(data)
 	self.EmoteData = data.Inventory.Emotes
+	self.ImageData = data.Inventory.CountImages
 	self.CaseData = data.Inventory.Case
 	self.NumOfEmotes = data.Slots.emoteSlots
 	self.NumOfCases = data.Slots.caseSlots
@@ -185,6 +189,7 @@ function InventoryUI:_Buttons()
 			-- Inside InventoryUI:_Buttons()
 			if child:IsA("TextButton") then
 				table.insert(self._ButtonConn, child.MouseButton1Click:Connect(function()
+					MusicModule:PlaySFX("Click") -- Play sound here
 					local slotName = "Emote"..child.Name -- e.g., "Emote1"
 					local emoteName = buttons.Parent.Name
 					local emoteID = self.EmoteClones[emoteName].emoteID
@@ -247,6 +252,13 @@ function InventoryUI:LoadButtons()
 		end
 	end
 	
+	for imageName, imageData in pairs(self.ImageClones) do
+		local Button = imageData.image:WaitForChild("Equip")
+		if Button:IsA("TextButton") then
+			table.insert(self.EquipImageBtn, Button)
+		end
+	end
+	
 	for emoteName, emoteData in pairs(self.EmoteClones) do
 		local Button = emoteData.emote:WaitForChild("Equip")
 		if Button:IsA("TextButton") then
@@ -263,6 +275,7 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 	local ScrollingFrame = InventoryFrame:WaitForChild("UI"):WaitForChild("ScrollingFrame")
 	local CaseTemplate = ScrollingFrame:WaitForChild("CaseTemplate")
 	local EmoteTemplate = ScrollingFrame:WaitForChild("EmoteTemplate")
+	local imageTemplate = ScrollingFrame:WaitForChild("ImageTemplate")
 	_emoteTemplate = EmoteTemplate
 	
 	repeat 
@@ -284,6 +297,20 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		self.CaseClones[_caseName] = { case = CaseClone, caseQty = _qty }
 	end
 	
+	for _imageName, imageID in pairs(self.ImageData) do
+		local ImageClone = imageTemplate:Clone()
+		ImageClone.Parent = ScrollingFrame
+		ImageClone.Name = _imageName
+		ImageClone.imgName.Text = _imageName
+		ImageClone.Visible = true
+		
+		print(imageID)
+		
+		ImageClone.img.Image = "rbxassetid://"  .. 4575171283  -- find image id & change image 
+
+		self.ImageClones[_imageName] = { image = ImageClone, imageID = imageID }
+	end
+
 
 	for _emoteName, emoteID in pairs(self.EmoteData) do
 		local EmoteClone = EmoteTemplate:Clone()
@@ -301,13 +328,15 @@ end
 
 
 function InventoryUI:UpdateInventory()
-	
 	-- Handle Case Update
 	for caseName, caseQty in pairs(self.CaseData) do
-		
-		self.CaseClones[tostring(caseName)].case.qty.Text = "QTY: ".. caseQty
+		if self.CaseClones[tostring(caseName)] then
+			self.CaseClones[tostring(caseName)].case.qty.Text = "QTY: ".. caseQty
+		end
 	end
-	
+
+	local newlyAdded = false
+
 	-- Handle New Emotes
 	for emoteName, emoteID in pairs(self.EmoteData) do
 		if not self.EmoteClones[emoteName] then
@@ -316,12 +345,31 @@ function InventoryUI:UpdateInventory()
 			EmoteClone.Name = emoteName
 			EmoteClone.emoteName.Text = emoteName
 			EmoteClone.Visible = true
-			self:PlaySlotEmote(EmoteClone, emoteID)
 
+			-- Ensure visibility matches current category filter
+			local CategoryText = EmoteClone.Parent.Parent.Parent:WaitForChild("CategoryText")
+			if CategoryText.Text == "Cases" then
+				EmoteClone.Visible = false
+			end
+
+			self:PlaySlotEmote(EmoteClone, emoteID)
 			self.EmoteClones[emoteName] = { emote = EmoteClone, emoteID = emoteID }
+
+			newlyAdded = true
 		end
 	end
-	
+
+	-- If new items were added, we must rebuild the button tables and reconnect listeners
+	if newlyAdded then
+		-- Clear internal button tracking tables (but not the connections yet, 
+		-- LoadButtons calls _Buttons which clears _ButtonConn)
+		table.clear(self.EquipButtons)
+		table.clear(self.OpenButtons)
+		table.clear(self.EquipImageBtn)
+
+		-- Re-scan all clones and re-apply listeners
+		self:LoadButtons()
+	end
 end
 
 

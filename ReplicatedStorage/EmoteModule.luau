@@ -19,6 +19,7 @@ EmoteModule.EmoteButtons = {}
 EmoteModule.PreviewEmotes = {}
 EmoteModule.ButtonConn = {}
 EmoteModule.VerifyConn = nil
+EmoteModule.PlayingEmote = nil
 
 local conn = {}
 local initialized = false
@@ -84,6 +85,11 @@ function EmoteModule:Init()
 			if hum and hum.MoveDirection.Magnitude > 0 then
 				currentEmote:Stop()
 				currentEmote = nil
+				
+			if self.PlayingEmote then
+				d.MusicEvent:FireServer("STOP", "stop")
+				self.PlayingEmote = nil
+			end
 			end
 		end
 	end)
@@ -220,12 +226,16 @@ function EmoteModule:SetupButtons()
 		
 		table.insert(self.ButtonConn, button.MouseButton1Click:Connect(function()
 			local EmoteId = self.CurrentEmotes[button.Parent.Name].animID
+			local EmoteName = self.CurrentEmotes[button.Parent.Name].animName
+			self.PlayingEmote = EmoteName
 			
 			local Character = d.localPlayer.Character
 			local Humanoid = Character:WaitForChild("Humanoid")
 			local Animator = Humanoid:WaitForChild("Animator")
 			
-			currentEmote = self:PlayEmote(Animator, EmoteId)
+			d.MusicEvent:FireServer(EmoteName, "play")
+			
+			currentEmote = self:PlayEmote(Animator, EmoteId, EmoteName)
 			
 			self:HandleEmoteWheel()
 		end))
@@ -247,7 +257,7 @@ function EmoteModule:PlayLocalPreview(animator, emoteId)
 end
 
 
-function EmoteModule:PlayEmote(animator, emoteId)
+function EmoteModule:PlayEmote(animator, emoteId, EmoteName)
 	if currentEmote then
 		currentEmote:Stop()
 		currentEmote = nil
@@ -301,6 +311,7 @@ function EmoteModule.OnStateChange(oldState, newState)
 			if currentEmote then
 				currentEmote:Stop()
 				currentEmote = nil
+				
 			end
 			return
 		end

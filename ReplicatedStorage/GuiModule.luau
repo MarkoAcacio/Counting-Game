@@ -88,7 +88,7 @@ function GuiModule:Init()  -- Makes a Listener ONCE
 	if roundConnection then
 		roundConnection:Disconnect()
 	end
-	
+	self:ChatVIP()
 	self:HandleButtonListeners()
 
 	
@@ -133,6 +133,32 @@ function GuiModule:HandleButtonListeners()
 		task.wait(0.1)
 	end)
 	
+end
+
+-- Add this to your GuiModule script
+local TextChatService = game:GetService("TextChatService")
+
+function GuiModule:ChatVIP()
+	TextChatService.OnIncomingMessage = function(message: TextChatMessage)
+		local properties = Instance.new("TextChatMessageProperties")
+
+		-- Ensure the message came from a real player
+		if message.TextSource then
+			local sender = Players:GetPlayerByUserId(message.TextSource.UserId)
+
+			-- CHECK FOR VIP STATUS HERE
+			-- Example: Checking a GamePass or a specific Attribute
+			local isVIP = sender:GetAttribute("IsVIP") == true 
+			-- OR: sender:IsInGroup(12345) 
+
+			if isVIP then
+				-- We use Rich Text to color the tag and the name
+				properties.PrefixText = "<font color='#FFD700'>[⭐ VIP]</font> " .. message.PrefixText
+			end
+		end
+
+		return properties
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------------------------------------

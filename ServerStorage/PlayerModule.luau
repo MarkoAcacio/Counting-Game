@@ -67,6 +67,7 @@ function PlayerModule:Init()
 			MusicEvent:FireClient(player, "BGM")
 			playerCharacter:ScaleTo(1)
 			ParticleHandler:InitParticle(playerCharacter, "Explosion") -- Change the 2nd parameter to player's actual particle name
+			InventoryHandler:IsVIP(player)
 
 			local hum = playerCharacter:FindFirstChild("Humanoid")
 			local hrp = playerCharacter:WaitForChild("HumanoidRootPart")
