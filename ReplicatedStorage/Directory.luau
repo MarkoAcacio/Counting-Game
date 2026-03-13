@@ -20,6 +20,8 @@ Directory.SoundsFolder = Directory.SoundService:WaitForChild("Sounds")
 Directory.MusicFolder = Directory.SoundsFolder:WaitForChild("Music")
 Directory.SFXFolder = Directory.SoundsFolder:WaitForChild("SFX")
 Directory.DeathSFXFolder = Directory.SFXFolder:WaitForChild("DeathFX")
+Directory.BillboardFolder = Directory.StarterGui:WaitForChild("Billboards")
+Directory.CasesFolder = game.Workspace:WaitForChild("Lobby"):WaitForChild("Models"):WaitForChild("Chest_Cases")
 
 -- Events
 Directory.SFXEvent = Directory.Events:WaitForChild("SFXEvent")
@@ -40,6 +42,13 @@ Directory.EmoteChange = Directory.Events:WaitForChild("EmoteChange")
 Directory.EmoteRequest = Directory.Events:WaitForChild("EmoteRequest")
 Directory.CurrencyEvent = Directory.Events:WaitForChild("CurrencyEvent")
 Directory.SaveEmoteSlot = Directory.Events:WaitForChild("SaveEmoteSlot")
+Directory.CaseRequest = Directory.Events:WaitForChild("CaseRequest")
+Directory.ToggleAFK = Directory.Events:WaitForChild("ToggleAFK")
+Directory.EquipDeath = Directory.Events:WaitForChild("EquipDeath")
+Directory.DeathEvent = Directory.Events:WaitForChild("DeathEvent")
+Directory.EquipCount = Directory.Events:WaitForChild("EquipCount")
+Directory.CountEvent = Directory.Events:WaitForChild("CountEvent")
+Directory.CaseOpen = Directory.Events:WaitForChild("CaseOpen")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

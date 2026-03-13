@@ -39,6 +39,12 @@ local cloneTable = {}
 
 local RewardFramePos
 
+local RARITY_COLORS = {
+	["Common"] = Color3.fromRGB(255, 255, 255), -- White
+	["Rare"] = Color3.fromRGB(117, 198, 255),   -- Light Blue
+	["Mythical"] = Color3.fromRGB(170, 0, 255), -- Purple
+}
+
 GachaUI.connections = {}
 
 -----------------------------------------------------------------------------------------------
@@ -63,19 +69,19 @@ function GachaUI:Init()
 	GachaUI.PreloadImages()
 	
 	-- @PARAMS | caseItem ( Determined Reward ), CaseType ( Normal, Premium )
-	table.insert(self.connections, d.GachaEvent.OnClientEvent:Connect(function(caseItem, CaseType, ProximityPrompt : ProximityPrompt)
+	table.insert(self.connections, d.GachaEvent.OnClientEvent:Connect(function(caseItem, CaseType, ProximityPrompt, allPrizes)
 		ProximityPrompt.Enabled = false
-		GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt)
+		-- Pass allPrizes into the next function
+		GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt, allPrizes)
 	end))
-	
 end
 
 -----------------------------------------------------------------------------------------------
 
-function GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt)
+function GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt, allPrizes)
 	local gachaFrame, ContainerFrame, ScrollingFrame, ItemTemplate, midPoint, CaseName, PrizeName = FetchGachaFrame()
 	
-	if GachaUI.CloneTemplate(ItemTemplate, ScrollingFrame, caseItem) then
+	if GachaUI.CloneTemplate(ItemTemplate, ScrollingFrame, caseItem, allPrizes) then
 		gachaFrame.Visible = true
 		
 		local BGTween = d.TweenService:Create(gachaFrame, OpeningAnim, {BackgroundTransparency = 0.4})
@@ -87,12 +93,12 @@ function GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt)
 			containerTween:Play()
 		end))
 
+		-- Inside OpenGachaUI
 		table.insert(tweenConnections, containerTween.Completed:Connect(function()
 			task.wait(0.3)
-			-- RUN GACHA SPIN HERE
 			MusicModule:PlaySFX("Spin")
-			GachaUI.SpinGacha(caseItem, CaseType,  ProximityPrompt)
-
+			-- ADD caseItem HERE
+			GachaUI.SpinGacha(caseItem, CaseType, ProximityPrompt)
 		end))
 		
 
@@ -101,61 +107,99 @@ function GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt)
 end
 
 
-function GachaUI.SpinGacha(caseItem, CaseType,  ProximityPrompt)
+function GachaUI.SpinGacha(caseItem, CaseType, ProximityPrompt)
 	local gachaFrame, ContainerFrame, ScrollingFrame, ItemTemplate, midPoint, CaseName, PrizeName = FetchGachaFrame()
-	
+
 	local GachaTween = d.TweenService:Create(ScrollingFrame, ScrollAnimation, {CanvasPosition = Vector2.new(RewardFramePos, 0)})
 	GachaTween:Play()
 
-	
-	return GachaUI.GachaFinished(gachaFrame,GachaTween, ContainerFrame,  ProximityPrompt)
+	-- ADD caseItem HERE
+	return GachaUI.GachaFinished(gachaFrame, GachaTween, ContainerFrame, ProximityPrompt, caseItem)
 end
 
 
+function GachaUI.GachaFinished(GachaFrame, GachaTween : Tween, ContainerFrame, ProximityPrompt:ProximityPrompt, CaseItem)
 
-function GachaUI.GachaFinished(GachaFrame, GachaTween : Tween, ContainerFrame,  ProximityPrompt:ProximityPrompt)
-	
 	table.insert(tweenConnections, GachaTween.Completed:Connect(function()
 		MusicModule:PlaySFX("SpinFinish")
+
+		-- Display the final prize name in the UI label
+		local _, _, _, _, _, _, PrizeName = FetchGachaFrame()
+		if PrizeName then
+			PrizeName.Text = "YOU WON: " .. CaseItem.Name
+			PrizeName.TextColor3 = RARITY_COLORS[CaseItem.RarityName] or Color3.new(1,1,1)
+			PrizeName.Visible = true
+		end
+
 		task.wait(3)
 		ProximityPrompt.Enabled = true
 		GachaUI.ResetUI(GachaFrame, ContainerFrame)  
 	end))
-	
 end
 
 
+local function getRarityColor(rarityName)
+	return RARITY_COLORS[rarityName] or Color3.new(1, 1, 1)
+end
 
-function GachaUI.CloneTemplate(ItemTemplate : Frame, ScrollingFrame : ScrollingFrame, CaseItem)
+function GachaUI.CloneTemplate(ItemTemplate : Frame, ScrollingFrame : ScrollingFrame, CaseItem, allPrizes)
 	local counter = 0
 	local rewardFrame = nil
-	
+
+	-- Cleanup existing clones
+	for _, clone in pairs(cloneTable) do clone:Destroy() end
+	table.clear(cloneTable)
 
 	while counter <= numberOfTemplates do
 		local clone = ItemTemplate:Clone()
 		local itemImage = clone:WaitForChild("ItemImage")
 		local itemName = clone:WaitForChild("ItemName")
+
+		-- Ensure a UIStroke exists for the border
+		local stroke = clone:FindFirstChild("UIStroke") or Instance.new("UIStroke")
+		stroke.Thickness = 2
+		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		stroke.Parent = clone
+
 		clone.Visible = true
 
-		itemImage.Image = Images.temp
-		itemName.Text = ItemTable[math.random(1, #ItemTable)]
+		-- PICK FILLER DATA
+		-- We pick a random item from the actual prize pool for the 'filler' effect
+		local fillerData = allPrizes[math.random(1, #allPrizes)]
 
-		if counter == 62 then
+		itemName.Text = fillerData.Name
+		itemName.TextColor3 = getRarityColor(fillerData.RarityName)
+		stroke.Color = getRarityColor(fillerData.RarityName)
+
+		-- Placeholder for Image (Update this if you add icons to your table later)
+		itemImage.Image = Images.temp 
+
+		-- THE REWARD (The actual item the player won)
+		if counter == RewardTemplate then
 			rewardFrame = clone
-			itemName.Text = CaseItem
-		end
-		
-		table.insert(cloneTable, clone)
+			itemName.Text = CaseItem.Name
 
+			local rewardColor = getRarityColor(CaseItem.RarityName)
+			itemName.TextColor3 = rewardColor
+			stroke.Color = rewardColor
+			stroke.Thickness = 4 -- Make the reward border thicker!
+
+			-- Add a slight "Glow" effect for Mythical rewards
+			if CaseItem.RarityName == "Mythical" then
+				local gradient = Instance.new("UIGradient")
+				gradient.Color = ColorSequence.new(rewardColor, Color3.new(1,1,1))
+				gradient.Parent = stroke
+			end
+		end
+
+		table.insert(cloneTable, clone)
 		clone.Parent = ScrollingFrame
 		counter += 1
 	end
 
-	-- Wait for UIListLayout to update positions
 	task.wait()
 
 	if rewardFrame then
-		-- Calculate position to center the reward frame in viewport
 		local frameCanvasPos = rewardFrame.AbsolutePosition.X - ScrollingFrame.AbsolutePosition.X
 		RewardFramePos = frameCanvasPos + (rewardFrame.AbsoluteSize.X / 2) - (ScrollingFrame.AbsoluteSize.X / 2)
 	end
@@ -178,6 +222,13 @@ function GachaUI.ResetUI(gachaFrame : Frame, ContainerFrame : Frame)
 
 	gachaFrame.Visible = false
 	ContainerFrame.Position = UDim2.new(0.5, 0, -0.5, 0)
+
+	-- Clear the prize text for the next spin
+	local _, _, _, _, _, _, PrizeName = FetchGachaFrame()
+	if PrizeName then
+		PrizeName.Text = ""
+		PrizeName.Visible = false
+	end
 	
 	local ScrollingFrame = ContainerFrame:WaitForChild("ScrollingFrame")
 	

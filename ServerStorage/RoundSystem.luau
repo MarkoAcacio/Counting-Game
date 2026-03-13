@@ -49,11 +49,13 @@ local finalRound = false
 
 local mapPos = CFrame.new(-89.676, -796.322, 0)
 
+RoundSystem.AFKListener = nil
+RoundSystem.AFKState = {}
+
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
 function RoundSystem:Init()
-	
 	local playerCount = WaitForPlayers()  -- Connect To UI
 	if playerCount then
 		RoundSystem:StartGame()
@@ -61,6 +63,12 @@ function RoundSystem:Init()
 		warn("Error | CheckPlayerCount")
 	end
 end
+
+-- Inside your PlayerModule or RoundSystem PlayerRemoving logic
+game.Players.PlayerRemoving:Connect(function(player)
+	RoundSystem.AFKState[player] = nil
+end)
+
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -127,6 +135,7 @@ local function DistributeReward(winningPlayers)
 end
 
 function RoundSystem:StartGame()
+	
 	playMusic("Music", "BGM")
 	
 	self.WinningPlayers = DistributeReward(self.WinningPlayers)
@@ -150,51 +159,94 @@ end
 function RoundSystem:StartIntermission()
 	self.IntermissionActive = true 
 	local Timer = Intermission or 15
-	
+
+	-- 1. WAIT FOR NON-AFK PLAYERS BEFORE STARTING THE TIMER
+	-- This handles cases where people go AFK during the intermission transition
+	while true do
+		local activeCount = 0
+		for _, player in ipairs(game.Players:GetPlayers()) do
+			if not PlayerModule.AFKPlayers[player] then
+				activeCount += 1
+			end
+		end
+
+		if activeCount >= 3 then
+			break -- Enough players to proceed
+		end
+
+		-- If not enough players, send the "Waiting" state to UI and pause
+		sendEvent(67, 0) 
+		task.wait(1)
+	end
+
+	-- 2. SETUP MAP (Only happens once threshold is met)
 	local randomMap = math.random(1, #d.MapTemplateFolder:GetChildren())
 	local map = d.MapTemplateFolder:GetChildren()[randomMap]:Clone()
 	map.Parent = MapsFolder
 	map:PivotTo(mapPos)
-	
+
 	PlayerModule:RagdollAction("restrict")
 	PlayerModule:RagdollAction("delete")
+	GameModule.CanAnimate = true
 
 	RoundTimer = defaultRoundTime
-	
+
+	-- 3. INTERMISSION LOOP
 	task.spawn(function()
 		while Timer > 0 and self.IntermissionActive do
-			-- Update UI
-			
-			sendEvent(1, Timer)
-			PlayerModule:SetPlaying()
-			task.wait(1)
-			Timer -= 1
+			-- RE-CHECK: If players go AFK DURING the countdown
+			local currentActive = 0
+			for _, p in ipairs(game.Players:GetPlayers()) do
+				if not PlayerModule.AFKPlayers[p] then
+					currentActive += 1
+				end
+			end
+
+			if currentActive < 3 then
+				-- If someone went AFK and we dropped below 3, reset/pause intermission
+				sendEvent(67, 0)
+				task.wait(1)
+				-- Optional: Reset Timer = 8 if you want the countdown to restart
+			else
+				-- Normal Countdown
+				sendEvent(1, Timer)
+				PlayerModule:SetPlaying()
+				task.wait(1)
+				Timer -= 1
+			end
 		end
-		
+
 		self.IntermissionActive = false
 		self:StartRound()  -- START ROUND
-		
 	end)
-	
 end
 
 ---------------------------------------- StartRound --------------------------------------------
 
--- 1 tp map, 2 tp spawn
-local function teleportPlayers(action)
-	for _, player in ipairs(PlayerModule:GetAlivePlayers()) do
+-- Updated teleportPlayers in RoundSystem
+local function teleportPlayers(action, targetPlayers)
+	-- Use targetPlayers if provided, otherwise default to all alive players
+	local playersToMove = targetPlayers or PlayerModule:GetAlivePlayers()
+
+	for _, player in ipairs(playersToMove) do
 		local character = player.Character
-		if character then
+		local hrp = character and character:FindFirstChild("HumanoidRootPart")
+
+		if hrp then
+			hrp.Anchored = true
+
 			if action == 1 then
 				character:PivotTo(mapSpawn.CFrame)
 			elseif action == 2 then
 				character:PivotTo(LobbySpawn.CFrame)
-
 			end
+
+			task.delay(0.1, function()
+				if hrp then hrp.Anchored = false end
+			end)
 		end
 	end
 end
-
 
 -- @isSurvive | returns true or false. manages decrease if everyone survive. else, none.
 function RoundSystem:StartRound(isSurvive)
@@ -274,6 +326,7 @@ end
 function RoundSystem:StartingNewInRound(type, isSurvive)
 	self.NewInRound = true
 	local Timer = 8
+	local AlivePlayers = nil
 	
 	PlayerModule:RagdollAction("delete")
 	
@@ -282,10 +335,28 @@ function RoundSystem:StartingNewInRound(type, isSurvive)
 		while Timer > 0 and self.NewInRound do
 			-- Update UI
 			-- Check if how many players survive, then fire round event again.
+			local currentAlive = PlayerModule:GetAlivePlayers()
+			AlivePlayers = #currentAlive
+
+			-- 2. NEW CHECK: If only 1 player left, stop the timer and skip elimination
+			if AlivePlayers <= 1 then
+				self.NewInRound = false
+				break
+			end
+			
 			sendEvent(3, Timer)
 
 			task.wait(1)
 			Timer -= 1
+		end
+		
+		local finalAlive = PlayerModule:GetAlivePlayers()
+
+		if #finalAlive == 1 then
+			-- Only one person survived the clicking madness or everyone else reset/left
+			print("Lone survivor found in Final Stand!")
+			RoundSystem:CelebrateWinners(2)
+			return
 		end
 
 		if type == 1 then  -- new round
@@ -329,7 +400,7 @@ end
 function RoundSystem:CelebrateWinners(roundStatus)
 	self.CelebrateWinnersActive = true
 	local Timer = WinTimer or 10
-	local winners = nil
+	local winners = PlayerModule:GetAlivePlayers() -- These are the people currently winning
 	
 	PlayerModule:RagdollAction("delete")
 	
@@ -344,27 +415,25 @@ function RoundSystem:CelebrateWinners(roundStatus)
 	
 	playMusic("SFX", "Win")
 	playMusic("Music", "Winner")
+	GameModule:StopAllCountAnimations()
+	
 	
 	local confetti = d.Templates:WaitForChild("Particle"):Clone()
 	confetti.Parent = workspace.Maps
 	
 	task.spawn(function()
 		while Timer > 0 and self.CelebrateWinnersActive do
-			-- Update UI
 			sendEvent(5, Timer)
-			-- Run Counting GameModule TO REWARD
-			
-			if roundStatus == 2 then
-				print("WINNERS: ", winners)
-			end
-			
 			task.wait(1)
 			Timer -= 1
 		end
+
 		self.CelebrateWinnersActive = false
-		
+
 		PlayerModule:ResetPlayerScale()
-		teleportPlayers(2)
+		
+		teleportPlayers(2, winners) 
+
 		GameModule:ResetGame()
 		self:StartGame()
 	end)
@@ -381,8 +450,18 @@ function RoundSystem:FinalStand()
 	PlayerModule:RagdollAction("delete")
 
 	task.spawn(function()
-		sendEvent(6, Timer)
-		task.wait(5.3)
+		
+		local currentAlive = PlayerModule:GetAlivePlayers()
+		AlivePlayers = #currentAlive
+		if AlivePlayers <= 1 then
+			self.FinalStandActive = false
+			d.CountEvent:FireAllClients(nil, nil)
+		end
+		
+		if self.FinalStandActive then
+			sendEvent(6, Timer)
+			task.wait(5.3)
+		end
 
 		while Timer > 0 and self.FinalStandActive do
 			-- 1. Get current count of alive players
@@ -593,20 +672,31 @@ sendEvent = function(action : number, Timer : number, firedNewRound : boolean)
 end
 
 WaitForPlayers = function()
+	-- Initial event to show "Waiting for players" UI
 	sendEvent(67, nil)
+
 	while true do
-		local count = 0
+		local playingCount = 0
+
+		-- Iterate through all players in the PlayerModule data
 		for player, data in pairs(PlayerModule.Players) do
-				count += 1
+			-- Check if the player is NOT AFK (isPlaying should be true)
+			-- We check the AFKPlayers table specifically as the "source of truth"
+			if not PlayerModule.AFKPlayers[player] then
+				playingCount += 1
+			end
 		end
 
-		if count >= 3 then
+		-- Threshold check (3 players required to start)
+		if playingCount >= 3 then
+			print("Player threshold met. Starting game with " .. playingCount .. " players.")
 			break
 		end
+
+		-- Update UI and wait
 		sendEvent(67, nil)
 		task.wait(1)
-		print("Waiting for players...")
-		
+		print("Waiting for non-AFK players... Current count: " .. playingCount)
 	end
 
 	return true
