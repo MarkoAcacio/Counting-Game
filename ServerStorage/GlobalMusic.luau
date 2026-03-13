@@ -8,7 +8,7 @@ local isLoaded = false
 local conn = {}
 
 local EmoteConfigs = {
-	["LowCortisol"] = {start = 1, stop = 17, fade = 1.5},
+	["LowCortisol"] = {start = 31, stop = 47.5, fade = 1.5},
 	["67"] = {start = 0., stop = 2, fade = 0.5},
 	-- ["Default"] is used if the emote name isn't in this list
 	["Default"] = {start = 0, stop = 15, fade = 1.2} 
@@ -26,6 +26,8 @@ local function playLoopSection(soundTemplate, parent, startTime, endTime, fadeTi
 		sound.TimePosition = startTime
 
 		sound.Volume = 0
+		sound.RollOffMaxDistance = 30  -- Completely silent at 60 studs
+		sound.RollOffMode = Enum.RollOffMode.Linear -- Predictable fading
 		sound:Play()
 		d.TweenService:Create(sound, TweenInfo.new(fadeTime), {Volume = 0.5}):Play()
 

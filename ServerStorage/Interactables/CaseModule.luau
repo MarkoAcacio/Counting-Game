@@ -53,7 +53,6 @@ local startListener
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
-
 function CaseModule:Init()
 	startListener()
 end
@@ -109,41 +108,23 @@ handleName = function(name:string, player : Player, ProximityPrompt)
 		end
 		
 	elseif name == "NormalCase" then
-		
 		local playerCoins = checkPlayerCoins(player)
-		
-		-- CHECK FIRST IF PLAYER HAS NORMAL CASE PENDING FROM GAMEPASS OR NO
-		
+
 		if playerCoins >= CaseProperties.CoinPrices.NormalCase then
-			local caseItem = getCaseItem(player)
+			local fullItemData = getCaseItem(player) -- This now returns the whole table {Name, Rarity, etc}
+
 			DataManager.SubtractCoins(player, CaseProperties.CoinPrices.NormalCase)
-			GachaUIEvent:FireClient(player, caseItem, "NormalCase", ProximityPrompt)
+
+			-- When firing the Gacha UI
+			local allPrizes = CaseProperties.NormalPrizes -- This is our merged list
+			GachaUIEvent:FireClient(player, fullItemData, "NormalCase", ProximityPrompt, allPrizes)
+
 			DataManager.SendCurrencies(player)
 			SFXEvent:FireClient(player, "Purchase")
-			
-		elseif playerCoins < CaseProperties.CoinPrices.NormalCase then
-			ProductEvent:FireClient(player, "case","NoMoneyNormal")
-			SFXEvent:FireClient(player, "Error")
 		end
 		
 	elseif name == "PremiumCase" then
 		
-	elseif name == "ImageCase" then	
-		local playerCoins = checkPlayerCoins(player)
-
-		if playerCoins >= CaseProperties.CoinPrices.ImageCase then
-			local imageItem = getCaseImage(player)
-			print(imageItem)
-			
-			DataManager.SubtractCoins(player, CaseProperties.CoinPrices.NormalCase)
-			GachaUIEvent:FireClient(player, imageItem, "ImageCase", ProximityPrompt)
-			DataManager.SendCurrencies(player)  -- Refresh UI
-			SFXEvent:FireClient(player, "Purchase")
-			
-		elseif playerCoins < CaseProperties.CoinPrices.NormalCase then
-			ProductEvent:FireClient(player, "case","NoMoneyNormal")
-			SFXEvent:FireClient(player, "Error")
-		end
 	else
 		warn("Invalid Case Name")
 	end
@@ -195,32 +176,62 @@ end
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
-local function determineReward(player, category)
-	local items = CaseProperties.Items[category]
-	local itemNames = {}
 
-	for itemName, itemID in pairs(items) do
-		table.insert(itemNames, itemName)
+local function GetRarity()
+	local rarity = math.random()
+	local cumulative = 0
+	for _, item in pairs(CaseProperties["Items"]) do
+		cumulative += item.Rarity
+		if rarity <= cumulative then
+			return item
+		end
+	end
+end
+
+
+local function determineReward(player, prizeTable)
+	-- 1. Perform the Weighted Roll
+	-- Since NormalPrizes is a combined list, we must ensure the 
+	-- cumulative math is based on the TOTAL sum of rarities in that combined list.
+	local roll = math.random()
+	local cumulative = 0
+	local selectedItem = nil
+
+	-- Calculate total sum for safety (especially since we combined 3 lists)
+	local totalRarity = 0
+	for _, item in ipairs(prizeTable) do
+		totalRarity += item.Rarity
 	end
 
-	local selectedItem = itemNames[math.random(1, #itemNames)]
+	-- Adjust roll to the total sum
+	roll *= totalRarity
 
-	local data = {}
-
-	if category == "Emotes" then
-		data = {
-			EmoteName = selectedItem,
-			EmoteID = items[selectedItem]
-		}
-		InventoryHandler:AddToInventory(player, "emote", data)	
-	elseif category == "Images" then
-		data = {
-			ImageName = selectedItem,
-			ImageID = items[selectedItem]
-		}
-		InventoryHandler:AddToInventory(player, "image", data)
+	for _, itemData in ipairs(prizeTable) do
+		cumulative += itemData.Rarity
+		if roll <= cumulative then
+			selectedItem = itemData
+			break
+		end
 	end
-	
+
+	-- Fallback to first item if roll fails
+	if not selectedItem then
+		selectedItem = prizeTable[1]
+	end
+
+	-- 2. Determine inventory folder based on the item's Type
+	-- This must match the folder names in your DataManager Template
+	local invType = "emote" 
+	if selectedItem.Type == "DeathAnim" then
+		invType = "death"
+	elseif selectedItem.Type == "CountAnim" then
+		invType = "count" -- NEW: Maps to your profile.Data.Inventory.Counts
+	end
+
+	-- 3. Add to inventory
+	-- This calls your InventoryHandler which handles the DataStore saving
+	InventoryHandler:AddToInventory(player, invType, selectedItem)
+
 	return selectedItem
 end
 
@@ -235,20 +246,10 @@ end
 ==================================================================================================
 ]]
 getCaseItem = function(player)
-	
-	local category = "Emotes"
-	--[[ if math.random() < 0.5 then  -- 50/50 chance
-		category = "Emotes"
-	else
-		category = "Death"
-	end ]]--
-	
-	local items = CaseProperties.Items[category]
-
-	return determineReward(player, category)
-	
+	-- Uses the merged table (Emotes + DeathAnims) we generated in CaseProperties
+	local prizeTable = CaseProperties.NormalPrizes
+	return determineReward(player, prizeTable)
 end
-
 
 
 ------------------------------------------------------------------------------------------------------------------------------------

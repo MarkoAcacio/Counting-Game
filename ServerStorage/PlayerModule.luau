@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GroupService = game:GetService("GroupService")
 local PhysicsService = game:GetService("PhysicsService")
 local SSS = game:GetService("ServerScriptService")
+local TweenService = game:GetService("TweenService")
 
 -- Folders
 local EventsFolder = ReplicatedStorage:WaitForChild("Events")
@@ -36,24 +37,30 @@ local RagdollModule = require(ModulesFolder:WaitForChild("Ragdoll"))
 local InventoryHandler = require(ModulesFolder:WaitForChild("InventoryHandler"))
 local ParticleHandler = require(ModulesFolder:WaitForChild("ParticleHandler"))
 
--- Add DataModule here next time.
-
 -- Variables & Functions
 PlayerModule["Players"] = {}
 PlayerModule["Characters"] = {}
 
-local AddRemovePlayer -- Handle Player Join/Leave
+local AddRemovePlayer
 local InitializedPlayers = {}
-
-
--- Players Table has this following:
--- Alive, timeClick, Counted, isPlaying
+PlayerModule.AFKPlayers = {}
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
 function PlayerModule:Init()
 
-	PlayerService.PlayerAdded:Connect(function(player)  -- Connect Function Once
+	local d = require(ServerStorage:WaitForChild("Modules"):WaitForChild("Directory"))
+	local toggleRemote = d.ToggleAFK
+
+	toggleRemote.OnServerInvoke = function(player)
+		return self:ToggleAFK(player)
+	end
+
+	PlayerService.PlayerRemoving:Connect(function(player)
+		self.AFKPlayers[player] = nil
+	end)
+
+	PlayerService.PlayerAdded:Connect(function(player)
 		print("PlayerAdded fired:", player.Name)
 		PlayerModule:HandlePlayerJoin(player)
 
@@ -61,45 +68,78 @@ function PlayerModule:Init()
 			InventoryHandler:Init(player)
 		end)
 
-		-- Player Spawn
 		player.CharacterAdded:Connect(function(playerCharacter)
-			-- Handle Character Here.
+			-- CRITICAL: Wait for character to FULLY load before touching anything
+			local hum = playerCharacter:WaitForChild("Humanoid")
+			local hrp = playerCharacter:WaitForChild("HumanoidRootPart")
+
+			-- Wait for Roblox's spawn animation to finish
+			task.wait(0.3)
+
+			-- Now safe to modify character
+			local profile = DataManager.WaitForProfile(player)
+			if profile then
+				player:SetAttribute("EquippedDeath", profile.Data.DeathAnim)
+			end
+
 			MusicEvent:FireClient(player, "BGM")
-			playerCharacter:ScaleTo(1)
-			ParticleHandler:InitParticle(playerCharacter, "Explosion") -- Change the 2nd parameter to player's actual particle name
+			ParticleHandler:InitParticle(playerCharacter, "Explosion")
 			InventoryHandler:IsVIP(player)
 
-			local hum = playerCharacter:FindFirstChild("Humanoid")
-			local hrp = playerCharacter:WaitForChild("HumanoidRootPart")
 			hum.BreakJointsOnDeath = false
 
-			-- Player Death
+			-- Death handling
 			hum.Died:Connect(function()
-			
-			-------------------------------------------------- Change in the future to what the player has equipped.
-			ParticleHandler:Show(playerCharacter, "Explosion")	
-			SFXEvent:FireClient(player, "Explosion") 
-			--------------------------------------------------				
+				if playerCharacter:GetAttribute("HasDied") then return end
+				playerCharacter:SetAttribute("HasDied", true)
+
+				-- Safety check - ensure character is still in workspace
+				if not playerCharacter.Parent or playerCharacter.Parent ~= workspace then
+					return
+				end
+
+				local inventory = DataManager.GetPlayerInventory(player)
+				local equippedDeathName = player:GetAttribute("EquippedDeath")
+				local deathData = inventory and inventory.Deaths and inventory.Deaths[equippedDeathName]
+
+				if deathData and deathData.ID then
+					d.DeathEvent:FireAllClients(playerCharacter, deathData.ID)
+					self:HandleDeathMovement(playerCharacter, equippedDeathName)
+
+					local finished = false
+					local connection
+					connection = d.DeathEvent.OnServerEvent:Connect(function(firingPlayer)
+						if firingPlayer == player then
+							finished = true
+							connection:Disconnect()
+						end
+					end)
+
+					local start = tick()
+					repeat task.wait() until finished or (tick() - start > 5)
+					if connection then connection:Disconnect() end
+				else
+					ParticleHandler:Show(playerCharacter, "Explosion")	
+					SFXEvent:FireClient(player, "Explosion") 
+				end
 
 				if self.Players[player] then
 					self.Players[player].Alive = false
 					self.Players[player].isPlaying = false
 
-					if playerCharacter:GetAttribute("Ragdolled") == false then
-						RagdollModule:SetupRagdoll(player,playerCharacter, hum)
+					-- Only ragdoll if character is still in workspace
+					if playerCharacter and playerCharacter.Parent == workspace then
+						RagdollModule:SetupRagdoll(player, playerCharacter, hum)
 					end
 				end
 			end)
 
 			PlayerModule.HandlePlayerFavorite(player)
-			local VOID_Y = workspace.FallenPartsDestroyHeight or -500
-
-			playerCharacter:SetAttribute("Ragdolled", false)  -- SET ONLY TO FALSE WHEN ROUND IS ACTIVE!
+			playerCharacter:SetAttribute("Ragdolled", false)
 
 			if not playerCharacter:FindFirstChild("_NoPlayerCollisionApplied") then
 				PlayerModule:ApplyNoPlayerCollision(playerCharacter)
 
-				-- Mark that collision was applied
 				local tag = Instance.new("BoolValue")
 				tag.Name = "_NoPlayerCollisionApplied"
 				tag.Value = true
@@ -109,22 +149,9 @@ function PlayerModule:Init()
 			table.insert(self.Characters, playerCharacter)
 			PlayerModule:HandleCharacterLoad(playerCharacter)
 
-			task.spawn(function()
-				while playerCharacter.Parent and hum.Health > 0 do
-					local HRP = playerCharacter:FindFirstChild("HumanoidRootPart")
-					task.wait(0.2)
-					if HRP.Position.Y < VOID_Y then
-						hum.BreakJointsOnDeath = true
-					else
-						break
-					end
-				end
-			end)
-
 		end)
 
 	end)
-
 
 	InitEvent.OnServerEvent:Connect(function(player)
 		DailyRewardServer:Init(player)
@@ -133,10 +160,8 @@ function PlayerModule:Init()
 
 		if InitializedPlayers[player] then return end
 		InitializedPlayers[player] = true
-
 	end)
 
-	-- Handle players already in game
 	for _, player in ipairs(PlayerService:GetPlayers()) do
 		self:HandlePlayerJoin(player)
 		if player.Character then
@@ -146,15 +171,28 @@ function PlayerModule:Init()
 
 end
 
+function PlayerModule:HandleDeathMovement(character, deathName)
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	if deathName == "Elevate" then
+		local tweenInfo = TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		local goal = {CFrame = hrp.CFrame * CFrame.new(0, hrp.Size.Y + 3 , 0)}
+		local tween = TweenService:Create(hrp, tweenInfo, goal)
+		tween:Play()
+
+	elseif deathName == "Sink" then
+		local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Linear)
+		local goal = {CFrame = hrp.CFrame * CFrame.new(0, -5, 0)}
+		local tween = TweenService:Create(hrp, tweenInfo, goal)
+		tween:Play()
+	end
+end
+
 function PlayerModule.PromptGroupJoin()
 	local success, result = pcall(function()
 		return GroupService:GetGroupInfoAsync(35096019)
 	end)
-
-	if success  then
-
-	end
-
 end
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -166,19 +204,13 @@ end
 
 function PlayerModule:HandlePlayerLeave(player : Player)
 	print(player, "Left The Game")
-
 	AddRemovePlayer(player, "remove", self.Players)
-	-- Save Data
 end
 
 function PlayerModule:HandleCharacterLoad(character : Model)
-
-	-- LOAD SERVER SCRIPTS AGAIN! MAKE SURE TO CHECK\n IF PLAYER IS ALIVE OR NOT OR ROUNDENDED
 	print("CharacterLoaded")
 end
 
-
--- Add player
 function PlayerModule:AddPlayer(player)
 	self.Players[player] = {
 		Alive = true,
@@ -204,9 +236,7 @@ function PlayerModule:ClientData()
 	return clientData
 end
 
-
 function PlayerModule:RagdollAction(Action : string)
-
 	if Action == "allow" then
 		local alivePlayers = self:GetAlivePlayers()
 
@@ -232,37 +262,29 @@ end
 function PlayerModule:ApplyNoPlayerCollision(character)
 	local GROUP_NAME = "PlayerNoCollide"
 
-	-- Create group safely
 	pcall(function()
 		PhysicsService:RegisterCollisionGroup(GROUP_NAME)
 	end)
 
-	-- Disable collisions within the group
 	PhysicsService:CollisionGroupSetCollidable(GROUP_NAME, GROUP_NAME, false)
 
-	-- Function to set group on parts
 	local function setPart(part)
 		if part:IsA("BasePart") then
 			part.CollisionGroup = GROUP_NAME
 		end
 	end
 
-	-- Apply to existing parts
 	for _, descendant in ipairs(character:GetDescendants()) do
 		setPart(descendant)
 	end
 
-	-- Apply to future parts
 	character.DescendantAdded:Connect(setPart)
 end
 
-
--- Remove player
 function PlayerModule:RemovePlayer(player)
 	self.Players[player] = nil
 end
 
--- Get alive players
 function PlayerModule:GetAlivePlayers()
 	local alive = {}
 	for player, data in pairs(self.Players) do
@@ -273,10 +295,27 @@ function PlayerModule:GetAlivePlayers()
 	return alive
 end
 
+function PlayerModule:ToggleAFK(player)
+	self.AFKPlayers[player] = not self.AFKPlayers[player]
+	local isAFK = self.AFKPlayers[player]
 
+	local data = self.Players[player]
+	if data then
+		if isAFK then
+			data.isPlaying = false
+			data.Alive = false
+		else
+			data.isPlaying = false
+			data.Alive = false
+		end
+	end
+
+	print(player.Name .. " AFK: " .. tostring(isAFK))
+	return isAFK
+end
 
 PlayerModule.Checked = false
-function PlayerModule:checkCountedPlayers() -- Checks if everyone playing, have counted
+function PlayerModule:checkCountedPlayers()
 	local Counted = {}
 	for player, data in pairs(self.Players) do
 		if data.Counted and data.Alive and data.isPlaying then
@@ -292,7 +331,6 @@ function PlayerModule:checkCountedPlayers() -- Checks if everyone playing, have 
 			return false
 		end
 	end
-
 end
 
 function PlayerModule:ResetPlayerScale()
@@ -306,8 +344,7 @@ end
 function PlayerModule:EliminatePlayers()
 	print(self.Players)
 	for player, data in pairs(self.Players) do
-		if not data.Alive and data.isPlaying and data.Counted then  -- Doesn't kill dead players
-
+		if not data.Alive and data.isPlaying and data.Counted then
 			data.isPlaying = false
 			self:KillPlayer(player)
 		end
@@ -322,22 +359,25 @@ function PlayerModule:EmoteListener()
 	end
 
 	conn = EmoteEvent.onServerEvent:Connect(function(player, EmoteID, Animator, animInstance)
-
 		anim.AnimationId = "rbxassetid://" .. EmoteID
 		local loadedAnimation = Animator:LoadAnimation(animInstance)
 		loadedAnimation.Priority = Enum.AnimationPriority.Action
 		loadedAnimation:Play()
 		loadedAnimation.Looped = true
-
 	end)
 end
 
 function PlayerModule:SetPlayersAlive()
 	for player, data in pairs(self.Players) do
-		if data then
+		local isAFK = self.AFKPlayers[player]
+
+		if data and not isAFK then
 			data.Alive = true
 			data.Counted = false
 			data.isPlaying = true
+		else
+			data.Alive = false
+			data.isPlaying = false
 		end
 	end
 end
@@ -349,11 +389,9 @@ function PlayerModule:KillPlayer(player)
 	if not humanoid then return end
 
 	humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-
 	humanoid.Health = 0
-	humanoid:TakeDamage(humanoid.MaxHealth + 999) -- Overkill to ensure 0
+	humanoid:TakeDamage(humanoid.MaxHealth + 999)
 
-	-- If bugged, kill them manually.
 	if humanoid.Health > 0 then
 		player.Character:BreakJoints()
 	end
@@ -377,8 +415,7 @@ end
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
--- PlayersTable - PlayerModule["Players"]
-AddRemovePlayer = function(player : Player, action : string, PlayersTable)  -- Handle Adding / Removing Of Player
+AddRemovePlayer = function(player : Player, action : string, PlayersTable)
 	if action == "add" then
 		if not PlayersTable[player] then
 			PlayersTable[player] = {
@@ -393,10 +430,8 @@ AddRemovePlayer = function(player : Player, action : string, PlayersTable)  -- H
 	else
 		warn("Invalid Action | AddRemovePlayer")
 	end
-
 end
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
-
 
 return PlayerModule

@@ -33,6 +33,12 @@ local connections = {}
 local ButtonEvent = EventsFolder:WaitForChild("ButtonEvent")
 local ChestEvent = EventsFolder:WaitForChild("ChestEvent")
 
+GuiModule.FramesValue = {DF = false, IF = false, SF = false}
+
+local lastRoundState = 0  -- tracks the previous round state
+local animPlay = false
+local finishAnim = false
+
 -- Configas
 
 local UiText = {
@@ -90,6 +96,7 @@ function GuiModule:Init()  -- Makes a Listener ONCE
 	end
 	self:ChatVIP()
 	self:HandleButtonListeners()
+	self:SetupTweens()
 
 	
 	RoundEvent.OnClientEvent:Connect(function(RoundData, PlayersDict)
@@ -112,7 +119,7 @@ end
 
 function GuiModule:HandleButtonListeners()
 	local ScreenGui,RoundFrame, ButtonFrame, CountButton, RoundLabel, leftFrame, finalStandButton, LastStandFrame ,CurrencyFrame, EmoteWheel = GetGui()
-	
+		
 	CountButton.MouseButton1Click:Connect(function() -- NORMAL ROUND
 		if clicked then return end
 		MusicModule:PlaySFX("Click")
@@ -132,6 +139,29 @@ function GuiModule:HandleButtonListeners()
 		ButtonEvent:FireServer(2)
 		task.wait(0.1)
 	end)
+	
+	table.insert(connections, CurrencyFrame.AFK.MouseButton1Click:Connect(function()
+		-- Final safety check: If a round is active, ignore the click
+		local isRoundActive = (lastRoundState ~= 1 and lastRoundState ~= 67 and lastRoundState ~= 0)
+
+		if isRoundActive then
+			return -- Silent return since the button shouldn't even be visible
+		end
+
+		MusicModule:PlaySFX("Click")
+
+		local success, isAFK = pcall(function()
+			return d.ToggleAFK:InvokeServer()
+		end)
+
+		if success then
+			if isAFK then
+				CurrencyFrame.AFK.BackgroundColor3 = Color3.fromRGB(200, 0, 0) -- Red
+			else
+				CurrencyFrame.AFK.BackgroundColor3 = Color3.fromRGB(60, 229, 48) -- Green
+			end
+		end
+	end))
 	
 end
 
@@ -162,14 +192,12 @@ function GuiModule:ChatVIP()
 end
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
-local lastRoundState = nil  -- tracks the previous round state
-local animPlay = false
-local finishAnim = false
 
 HandleRoundUI = function(RoundData, PlayersData)
-	local ScreenGui,RoundFrame, ButtonFrame, CountButton, RoundLabel, leftFrame, finalStandButton, LastStandFrame = GetGui() -- Send the current set of GUI
+	local ScreenGui,RoundFrame, ButtonFrame, CountButton, RoundLabel, leftFrame, finalStandButton, LastStandFrame, CurrencyFrame = GetGui() -- Send the current set of GUI
 	
 	RoundFrame.Visible = true
+	lastRoundState = RoundData.State
 	
 	-- Detect new InRound
 	if RoundData.State == 2 and RoundData.newRound or RoundData.State == 6 then
@@ -180,23 +208,27 @@ HandleRoundUI = function(RoundData, PlayersData)
 		clicked = false
 		ButtonFrame.Visible = false
 		RoundLabel.Text = UiText.LoadingRound
+		CurrencyFrame.AFK.Visible = true
 	elseif RoundData.State == 67 then  -- WAITING FOR PLAYERS
 		clicked = false
 		ButtonFrame.Visible = false
+		CurrencyFrame.AFK.Visible = true
 		RoundLabel.Text = UiText.Waiting
 	elseif RoundData.State == 69 then  -- Disable Button for the player.
 		clicked = false
 		ButtonFrame.Visible = false
+		CurrencyFrame.AFK.Visible = true
 		RoundLabel.Text = UiText.Waiting
 	elseif RoundData.State == 1 then
 		finishAnim = false
 		animPlay = false
 		clicked = false
-		ButtonFrame.Visible = false
+		CurrencyFrame.AFK.Visible = true
 		RoundLabel.Text = UiText.Intermission .. RoundData.Time
 	elseif RoundData.State == 2 then
 		RoundLabel.TextTransparency = 0
 		RoundLabel.Text = UiText.InRound .. RoundData.Time
+		CurrencyFrame.AFK.Visible = false
 		
 		if PlayersData and PlayersData.Alive and not PlayersData.Counted and PlayersData.isPlaying then
 			HandleButtonUI(CountButton, ButtonFrame, finalStandButton,"normalRound")
@@ -205,15 +237,20 @@ HandleRoundUI = function(RoundData, PlayersData)
 	elseif RoundData.State == 3 then
 		RoundLabel.Text = UiText.NewInRound .. RoundData.Time
 		ButtonFrame.Visible = false
+		CurrencyFrame.AFK.Visible = false
 	elseif RoundData.State == 4 then
 		RoundLabel.Text = UiText.Eliminated .. RoundData.Time
 		ButtonFrame.Visible = false
+		CurrencyFrame.AFK.Visible = false
 	elseif RoundData.State == 5 then
 		RoundLabel.Text = UiText.Win .. RoundData.Time
+		
 		ButtonFrame.Visible = false
+		CurrencyFrame.AFK.Visible = false
 	elseif RoundData.State == 6 then
 		RoundLabel.Text = UiText.LastStand .. RoundData.Time
 		ButtonFrame.Visible = false
+		CurrencyFrame.AFK.Visible = false
 		
 		if animPlay == false then
 			animPlay = true
@@ -236,6 +273,7 @@ HandleRoundUI = function(RoundData, PlayersData)
 				GuiModule:IntroAnim(ScreenGui)
 			end
 		end
+		CurrencyFrame.AFK.Visible = false
 		
 	else
 		warn("Error | RoundData.State")
@@ -511,6 +549,48 @@ function GuiModule:SetCurrencyValues(CurrencyTable)
 	
 end
 
+
+local tweenConns = {}
+local tweenCache = {}
+
+local function tweenHover(x)
+	
+	if not tweenCache[x] then
+		tweenCache[x] = x.Size
+	end
+	
+	local normalSize = tweenCache[x]
+	local hoverSize = UDim2.new(normalSize.X.Scale * 1.1, 0, normalSize.Y.Scale * 1.1, 0)
+	local sizeTween = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	
+	return hoverSize, sizeTween, normalSize
+end
+
+
+function GuiModule:SetupTweens()
+	local ScreenGui,RoundFrame, ButtonFrame, CountButton, RoundLabel, leftFrame, finalStandButton, LastStandFrame ,CurrencyFrame, EmoteWheel = GetGui()
+	
+	for _, conn in ipairs(tweenConns) do
+		if conn then conn:Disconnect() end
+	end
+	
+	table.clear(tweenConns)
+	
+	table.insert(tweenConns, CurrencyFrame.Emote.MouseEnter:Connect(function()
+		local hoverSize, sizeTween = tweenHover(CurrencyFrame.Emote)
+		MusicModule:PlaySFX("Hover")
+		local tween = d.TweenService:Create(CurrencyFrame.Emote, sizeTween, {Size = hoverSize})
+		tween:Play()
+	end))
+	
+	table.insert(tweenConns, CurrencyFrame.Emote.MouseLeave:Connect(function()
+		local _, sizeTween, normalSize = tweenHover(CurrencyFrame.Emote)
+		local tween = d.TweenService:Create(CurrencyFrame.Emote, sizeTween, {Size = normalSize})
+		tween:Play()
+	end))
+	
+	
+end
 
 
 

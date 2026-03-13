@@ -22,7 +22,7 @@ function InventoryHandler:IsVIP(player)
 
 		-- Set the attribute for the first time
 		player:SetAttribute("IsVIP", success and hasPass or false)
-		
+
 		if success and hasPass then return true
 		else return false
 		end
@@ -52,14 +52,14 @@ end
 	]]
 
 function InventoryHandler:AddToInventory(player : Player, action, reward)
-	if action == "emote" then
+	-- Map the action string to the DataManager folder names
+	-- Action comes from CaseModule (e.g., "emote", "death", "count")
+
+	if action == "emote" or action == "death" or action == "count" then
+		-- reward is now the table: {Name = "...", ID = 123, RarityName = "...", Type = "..."}
 		DataManager.AddPlayerInventory(player, action, reward)
 		self:UpdateInventory(player)
 	elseif action == "case" then
-		DataManager.AddPlayerInventory(player, action, reward)
-		self:UpdateInventory(player)
-	elseif action == "image" then -- UNFINISHED. NOT YET HANDLED REWARDING SO THIS IS USELESS FOR NOW. REFER TO CASEMODULE TO SETUP REWARDS.
-		print("image")
 		DataManager.AddPlayerInventory(player, action, reward)
 		self:UpdateInventory(player)
 	end
@@ -70,7 +70,7 @@ function InventoryHandler:SetupListeners()
 	table.insert(self.connections, d.VerifyEvent.OnServerEvent:Connect(function(player, EmoteID)
 		self:VerifyOwnership(player, EmoteID)
 	end))
-	
+
 	d.SaveEmoteSlot.OnServerEvent:Connect(function(player, slotName, emoteName, emoteID)
 		-- Security: Check if they actually own the emote before saving the slot
 		local inventory = DataManager.GetPlayerInventory(player)
@@ -80,32 +80,54 @@ function InventoryHandler:SetupListeners()
 			warn(player.Name .. " tried to equip an unowned emote!")
 		end
 	end)
-	
+
 	d.EmoteRequest.OnServerInvoke = function(player)
-			local profile = DataManager.WaitForProfile(player)
-			
-			if profile and profile.Data.EmoteConfig then
-				print("Server sending EmoteConfig to Client for: " .. player.Name)
-				return profile.Data.EmoteConfig -- This sends the SAVED slots
-			else
-				print("No EmoteConfig found, sending empty table")
-				return {} 
-			end
+		local profile = DataManager.WaitForProfile(player)
+
+		if profile and profile.Data.EmoteConfig then
+			return profile.Data.EmoteConfig -- This sends the SAVED slots
+		else
+			print("No EmoteConfig found, sending empty table")
+			return {} 
+		end
 	end
 	
+	d.CaseOpen
+
+	-- Equip Death Animation
+	d.EquipDeath.OnServerEvent:Connect(function(player, itemName)
+		DataManager.EquipDeathAnimation(player, itemName)
+	end)
+
+	-- NEW: Equip Count Animation
+	d.EquipCount.OnServerEvent:Connect(function(player, itemName)
+		DataManager.EquipCountAnimation(player, itemName)
+	end)
+
 end
 
 function InventoryHandler:VerifyOwnership(player : Player, ItemID)
 	local inventory = DataManager.GetPlayerInventory(player)
+	if not inventory then return end
+
 	local hasOwned = false
 
-	if inventory and inventory.Emotes then
-		for name, id in pairs(inventory.Emotes) do
-			if tostring(id) == tostring(ItemID) then
-				hasOwned = true
-				break 
+	-- We check every folder in the inventory
+	local foldersToCheck = {"Emotes", "Deaths", "Counts"}
+
+	for _, folderName in ipairs(foldersToCheck) do
+		local folder = inventory[folderName]
+		if folder then
+			for name, data in pairs(folder) do
+				-- If data is a table, check .ID. If it's a number, check it directly.
+				local savedID = (type(data) == "table" and data.ID) or data
+				if tostring(savedID) == tostring(ItemID) then
+					hasOwned = true
+					break
+				end
 			end
-		end		
+		end
+		if hasOwned then break end
 	end
 
 	d.VerifyEvent:FireClient(player, ItemID, hasOwned)
@@ -118,28 +140,25 @@ function InventoryHandler:UpdateInventory(player : Player)
 	local NumberOfCases = 0
 	local NumberOfImages = 0
 	local inventory = DataManager.GetPlayerInventory(player)
-	
+
+	print(inventory)
+
 	if inventory then
 		for _ in pairs(inventory.Emotes) do
 			NumberOfEmotes += 1
 		end
-		for _ in pairs(inventory.CountImages) do
-			NumberOfImages+= 1
-		end
-		
-		
 		NumberOfCases = _NumberOfCases
 	end
 
-	
+
 	local data = {
 		Inventory = inventory,
 		Slots = {emoteSlots = NumberOfEmotes, caseSlots = NumberOfCases, countImages = NumberOfImages},
 		totalSlots = NumberOfEmotes + NumberOfCases
 	}
-	
+
 	d.InventoryEvent:FireClient(player, data)  -- Sends data to inventory. Note, send again when user purchase.
-	
+
 end
 
 --------------------------------------------------------------------------------------------------------
@@ -156,7 +175,7 @@ end
 
 function InventoryHandler:GetInventory(player : Player)
 	local inventory = DataManager.GetPlayerInventory(player)
-	
+
 	return inventory
 end
 

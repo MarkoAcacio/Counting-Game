@@ -26,6 +26,7 @@ Directory.MapTemplateFolder = Directory.Templates:WaitForChild("Map")
 Directory.DeathSFXFolder = Directory.SFXFolder:WaitForChild("DeathFX")
 
 -- Events
+Directory.ToggleAFK = Directory.Events:WaitForChild("ToggleAFK")
 Directory.SFXEvent = Directory.Events:WaitForChild("SFXEvent")
 Directory.MusicEvent = Directory.Events:WaitForChild("MusicEvent")
 Directory.GachaEvent = Directory.Events:WaitForChild("GachaUI")
@@ -44,6 +45,12 @@ Directory.EmoteRequest = Directory.Events:WaitForChild("EmoteRequest")
 Directory.CurrencyEvent = Directory.Events:WaitForChild("CurrencyEvent")
 Directory.RoundEvent = Directory.Events:WaitForChild("RoundEvent")
 Directory.SaveEmoteSlot = Directory.Events:WaitForChild("SaveEmoteSlot")
+Directory.CaseRequest = Directory.Events:WaitForChild("CaseRequest")
+Directory.EquipDeath = Directory.Events:WaitForChild("EquipDeath")
+Directory.DeathEvent = Directory.Events:WaitForChild("DeathEvent")
+Directory.EquipCount = Directory.Events:WaitForChild("EquipCount")
+Directory.CountEvent = Directory.Events:WaitForChild("CountEvent")
+Directory.CaseOpen = Directory.Events:WaitForChild("CaseOpen")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data
