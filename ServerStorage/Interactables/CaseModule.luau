@@ -1,10 +1,14 @@
 local CaseModule = {}
 
+local d = require(game:GetService("ServerStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
+
 -- Services
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local SSS = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+local GroupService = game:GetService("GroupService")
 
 -- Folders
 local ModuleFolder = ServerStorage:WaitForChild("Modules")
@@ -24,6 +28,10 @@ local MusicEvent = EventsFolder:WaitForChild("MusicEvent")
 local GachaUIEvent = EventsFolder:WaitForChild("GachaUI")
 local ProductEvent = EventsFolder:WaitForChild("ProductEvent")
 
+local ShopProperties = require(ModuleFolder:WaitForChild("Shop"):WaitForChild("ShopProperties"))
+
+local _d = require(game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
+
 
 
 -- Variables&Functions
@@ -42,6 +50,7 @@ local isGroupMember
 local GroupID = 228201671
 
 local getCooldownTime
+
 
 -- Events
 
@@ -76,6 +85,8 @@ end
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
+local proxTable = {}
+
 startListener = function()
 	for _, model in pairs(ChestCasesFolder:GetChildren()) do
 		if model:IsA("Model") then
@@ -85,11 +96,33 @@ startListener = function()
 				if ProximityPrompt then
 					ProximityPrompt.Triggered:Connect(function(player)
 						local modelName = model.Name
+						table.insert(proxTable,ProximityPrompt)
 						handleName(modelName, player, ProximityPrompt)
 					end)
 				end
 			end
 		end
+	end
+end
+
+function CaseModule.OpenPremiumCase(player, type)
+	
+	print("Attempting to Open Case..")
+	
+	if type == 1 then
+		for _, prox in pairs(proxTable) do
+			local CaseName = prox.Parent.Parent.Name
+			if CaseName == "PremiumCase" then
+				local fullItemData = getCaseItem(player, true)
+				local allPrizes = CaseProperties.PremiumPrizes
+				GachaUIEvent:FireClient(player, fullItemData, "PremiumCase", prox, allPrizes)
+			end
+		end
+		table.clear(proxTable)
+	elseif type == 2 then
+		local fullItemData = getCaseItem(player, true)
+		local allPrizes = CaseProperties.PremiumPrizes
+		GachaUIEvent:FireClient(player, fullItemData, "PremiumCase", _d.CasesFolder.PremiumCase.Mesh.ProximityPrompt, allPrizes)
 	end
 end
 
@@ -111,7 +144,7 @@ handleName = function(name:string, player : Player, ProximityPrompt)
 		local playerCoins = checkPlayerCoins(player)
 
 		if playerCoins >= CaseProperties.CoinPrices.NormalCase then
-			local fullItemData = getCaseItem(player) -- This now returns the whole table {Name, Rarity, etc}
+			local fullItemData = getCaseItem(player, false) -- This now returns the whole table {Name, Rarity, etc}
 
 			DataManager.SubtractCoins(player, CaseProperties.CoinPrices.NormalCase)
 
@@ -121,10 +154,19 @@ handleName = function(name:string, player : Player, ProximityPrompt)
 
 			DataManager.SendCurrencies(player)
 			SFXEvent:FireClient(player, "Purchase")
+			table.clear(proxTable)
+		else
+			SFXEvent:FireClient(player, "Error")
 		end
 		
-	elseif name == "PremiumCase" then
+	elseif name == "PremiumCase" then  -- SOON CHANGE UI FOR A PREMIUM CASE
 		
+		local productID = ShopProperties.DevProducts.x1CaseIns -- Or your specific Premium ID
+
+		print("Prompting " .. player.Name .. " to purchase Premium Case")
+		MarketplaceService:PromptProductPurchase(player, productID)
+		
+		SFXEvent:FireClient(player, "Purchase")
 	else
 		warn("Invalid Case Name")
 	end
@@ -134,37 +176,48 @@ end
 ------------------------------------------------------------------------------------------------------------------------------------
 
 handleTime = function(action:string, player:Player)
-	
 	if action == "claim" then
-		
-		local isMember = isGroupMember(player)
-		SFXEvent:FireClient(player, "ReceiveRewardChestCase")
-		SFXEvent:FireClient(player, "Coin")
-		
+		-- 1. Check if they are in the group
+		local isMember = player:IsInGroupAsync(GroupID)
+
 		if isMember then
-			local time = os.time()
-			DataManager.setClaim(player, time)
-			CaseModule:HandleChestUI(player)
-			DataManager.AddCoins(player, CaseProperties.ChestReward * 2)
-			DataManager.SendCurrencies(player)
-			
+			-- 2. They are a member, now check if they are ACTUALLY allowed to claim (cooldown check)
+			local lastClaim = DataManager.getLastClaim(player)
+			local timeSinceLast = os.time() - lastClaim
+
+			if timeSinceLast >= CaseProperties.RewardCooldown then
+				-- SUCCESS: Give Rewards
+				local currentTime = os.time()
+				DataManager.setClaim(player, currentTime)
+
+				CaseModule:HandleChestUI(player)
+				DataManager.AddCoins(player, CaseProperties.ChestReward)
+				DataManager.SendCurrencies(player)
+
+				SFXEvent:FireClient(player, "ReceiveRewardChestCase")
+				SFXEvent:FireClient(player, "Coin")
+				print(player.Name .. " claimed group rewards.")
+			else
+				-- This shouldn't normally be hit if the proximity prompt logic works, but good for safety
+				SFXEvent:FireClient(player, "Error")
+				warn("Player attempted to claim too early.")
+			end
 		else
-			local time = os.time()
-			DataManager.setClaim(player, time)
-			CaseModule:HandleChestUI(player)
-			DataManager.AddCoins(player, CaseProperties.ChestReward)
-			DataManager.SendCurrencies(player)
+			-- 3. Not a member: Prompt them to join
+			d.NotificationEvent:FireClient(player, "Group status is updating! Please wait 1-2 minutes if you just joined.")
+			d.PromptEvent:FireClient(player)
+			SFXEvent:FireClient(player, "Error")
+			
 		end
-		-- HANDLE REWARDS & TIME FOR GUI HERE
-		
+
 	elseif action == "cooldown" then
+		-- Fire the product event to allow them to skip the timer with Robux
 		ProductEvent:FireClient(player, "case", "SkipChestTimer")
 		SFXEvent:FireClient(player, "Error")
 	else 
 		SFXEvent:FireClient(player, "Error")
 		warn("Invalid Action | GetTime")
 	end
-	
 end
 
 getCooldownTime = function(player : Player)   -- RETURNS COOLDOWN TIME 
@@ -245,10 +298,16 @@ end
 	UPDATE CASE ITEM TO CATER DIFFERENT CATEGORIES. ( just use random on them. )
 ==================================================================================================
 ]]
-getCaseItem = function(player)
+getCaseItem = function(player, isPremium)
 	-- Uses the merged table (Emotes + DeathAnims) we generated in CaseProperties
-	local prizeTable = CaseProperties.NormalPrizes
-	return determineReward(player, prizeTable)
+	
+	if isPremium then
+		local prizeTable = CaseProperties.PremiumPrizes
+		return determineReward(player, prizeTable)
+	else
+		local prizeTable = CaseProperties.NormalPrizes
+		return determineReward(player, prizeTable)
+	end
 end
 
 

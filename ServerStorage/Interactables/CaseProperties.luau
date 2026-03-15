@@ -25,12 +25,18 @@ CaseProperties["Items"] = {
 }
 -- ["Jojo"] = 103201215781653,  -- Make this premium.
 
+
 local function generatePrizeList(categoryName, isPremium)
 	local list = {}
 	local categoryData = CaseProperties["Items"][categoryName]
 
 	if categoryData then
 		for itemName, data in pairs(categoryData) do
+			-- NEW: Filter out specific items for Premium
+			if isPremium and (itemName == "67" or itemName == "Minecraft" or itemName == "Pose3") then
+				continue -- Skip this item entirely
+			end
+
 			local entry = {Name = itemName}
 			for key, value in pairs(data) do
 				entry[key] = value
@@ -39,9 +45,9 @@ local function generatePrizeList(categoryName, isPremium)
 			-- BUFF CHANCES FOR PREMIUM
 			if isPremium then
 				if entry.RarityName == "Mythical" then
-					entry.Rarity = entry.Rarity * 3 -- e.g., 2% becomes 6%
+					entry.Rarity = entry.Rarity * 4 
 				elseif entry.RarityName == "Rare" then
-					entry.Rarity = entry.Rarity * 2 -- e.g., 15% becomes 30%
+					entry.Rarity = entry.Rarity * 3 
 				end
 			end
 
@@ -50,17 +56,17 @@ local function generatePrizeList(categoryName, isPremium)
 	end
 	return list
 end
-local function getCombinedPrizes(categories)
+
+local function getCombinedPrizes(categories, isPremium) -- Added isPremium parameter here
 	local combined = {}
 	for _, category in ipairs(categories) do
-		local items = generatePrizeList(category)
+		local items = generatePrizeList(category, isPremium) -- Pass it through
 		for _, item in ipairs(items) do
 			table.insert(combined, item)
 		end
 	end
 	return combined
 end
-
 
 
 -- Regular Odds
@@ -79,29 +85,27 @@ CaseProperties["Chances"] = {
 
 CaseProperties["CoinPrices"] = {
 	NormalCase = 1,
-	PremiumCAse = 1299,
 }
 
 CaseProperties["RewardCooldown"] = 43200
 CaseProperties["ChestReward"] = 50
 
 d.CaseRequest.OnServerInvoke = function(player)
-	
 	local Normal = {
-			CategoryName = "NormalPrizes",
-			Items = CaseProperties["NormalPrizes"]
-	}
-	
-	local Premium = {
-		CategoryName = "PremiumPrizes",
+		CategoryName = "NormalPrizes",
 		Items = CaseProperties["NormalPrizes"]
 	}
-	
+
+	local Premium = {
+		CategoryName = "PremiumPrizes",
+		Items = CaseProperties["PremiumPrizes"] -- FIXED: Now uses PremiumPrizes
+	}
+
 	local finalData = {
 		Normal = Normal,
 		Premium = Premium
 	}
-	
+
 	return finalData
 end
 

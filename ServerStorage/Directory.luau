@@ -14,6 +14,7 @@ Directory.GroupService = game:GetService("GroupService")
 Directory.AvatarService = game:GetService("AvatarEditorService")
 Directory.RunService = game:GetService("RunService")
 Directory.UserInputService = game:GetService("UserInputService")
+Directory.GroupService = game:GetService("GroupService")
 
 -- Folders
 Directory.SoundsFolder = Directory.SoundService:WaitForChild("Sounds")
@@ -51,6 +52,8 @@ Directory.DeathEvent = Directory.Events:WaitForChild("DeathEvent")
 Directory.EquipCount = Directory.Events:WaitForChild("EquipCount")
 Directory.CountEvent = Directory.Events:WaitForChild("CountEvent")
 Directory.CaseOpen = Directory.Events:WaitForChild("CaseOpen")
+Directory.EquippedRequest = Directory.Events:WaitForChild("EquippedRequest")
+Directory.EmoteSound = Directory.Events:WaitForChild("EmoteSound")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

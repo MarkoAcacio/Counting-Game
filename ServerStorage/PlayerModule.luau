@@ -36,6 +36,7 @@ local DataManager = require(SSS:WaitForChild("Data"):WaitForChild("DataManager")
 local RagdollModule = require(ModulesFolder:WaitForChild("Ragdoll"))
 local InventoryHandler = require(ModulesFolder:WaitForChild("InventoryHandler"))
 local ParticleHandler = require(ModulesFolder:WaitForChild("ParticleHandler"))
+local GlobalMusic = require(ModulesFolder:WaitForChild("GlobalMusic"))
 
 -- Variables & Functions
 PlayerModule["Players"] = {}
@@ -53,7 +54,11 @@ function PlayerModule:Init()
 	local toggleRemote = d.ToggleAFK
 
 	toggleRemote.OnServerInvoke = function(player)
-		return self:ToggleAFK(player)
+		if self.Players[player].isPlaying == false then
+			return self:ToggleAFK(player)
+		else
+			warn("Can't AFK in-game")
+		end
 	end
 
 	PlayerService.PlayerRemoving:Connect(function(player)
@@ -119,8 +124,8 @@ function PlayerModule:Init()
 					repeat task.wait() until finished or (tick() - start > 5)
 					if connection then connection:Disconnect() end
 				else
-					ParticleHandler:Show(playerCharacter, "Explosion")	
-					SFXEvent:FireClient(player, "Explosion") 
+					ParticleHandler:Show(playerCharacter, "Explosion")
+					GlobalMusic:PlayDeathSFX(hrp, "Explode", player)
 				end
 
 				if self.Players[player] then

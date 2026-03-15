@@ -1,7 +1,7 @@
 local InventoryHandler = {}
 
 local d = require(game:GetService("ServerStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
-local DataManager = require(d.ServerScriptService:WaitForChild("Data"):WaitForChild("DataManager"))
+local DataManager = require(d.ServerScriptService:WaitForChild("Data").DataManager)
 
 InventoryHandler.connections = {}
 
@@ -92,7 +92,21 @@ function InventoryHandler:SetupListeners()
 		end
 	end
 	
-	d.CaseOpen
+	d.EquippedRequest.OnServerInvoke = function(player)
+		local DeathEquipped, CountEquipped, EmoteConfig = DataManager.GetPlayerEquipped(player)
+		
+		
+		return DeathEquipped, CountEquipped, EmoteConfig
+	end
+	
+	d.CaseOpen.OnServerEvent:Connect(function(player, case)
+		local valid = DataManager.subtractCase(player, case)
+		
+		if valid then
+			local CaseModule = require(d.Modules.Interactables.CaseModule)
+			CaseModule.OpenPremiumCase(player, 2)
+		end
+	end)
 
 	-- Equip Death Animation
 	d.EquipDeath.OnServerEvent:Connect(function(player, itemName)
@@ -140,8 +154,6 @@ function InventoryHandler:UpdateInventory(player : Player)
 	local NumberOfCases = 0
 	local NumberOfImages = 0
 	local inventory = DataManager.GetPlayerInventory(player)
-
-	print(inventory)
 
 	if inventory then
 		for _ in pairs(inventory.Emotes) do

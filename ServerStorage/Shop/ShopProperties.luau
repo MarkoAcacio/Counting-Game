@@ -10,7 +10,8 @@ local ShopProperties = {}
 -- Config
 ShopProperties.DevProducts = {
 		x1Case = 3527680986,
-		x3Case = 3527681268,
+		x1CaseIns = 3555414708,  -- Instant Roll.
+			x3Case = 3527681268,
 		x2Case = 3527681381,
 		SkipTime = 3529893514,
 		coin1 = 3534903503, -- 500 C

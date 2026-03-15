@@ -13,7 +13,6 @@ local GameModule = require(d.Modules:WaitForChild("GameModule"))
 local DataManager = require(d.ServerScriptService:WaitForChild("Data"):WaitForChild("DataManager"))
 
 -- Variables & Functions
-local mapSpawn = MapsFolder:WaitForChild("MapSpawn")
 local LobbySpawn = LobbyFolder:WaitForChild("SpawnLocation")
 
 local WaitForPlayers  -- Checks if 2 Players or more. If not, It will wait.
@@ -30,11 +29,15 @@ local EndEarly
 local mapNames = {
 	"map1",
 	"map2",
+	"map3",
+	"map4",
+	"map5",
+	"map6",
 }
 
 local defaultRoundTime = 20
 
-local Intermission = 8
+local Intermission = 15
 local RoundTimer = defaultRoundTime
 local WinTimer = 10
 
@@ -42,6 +45,8 @@ RoundSystem.pastAlivePlayers = 0
 RoundSystem.AllowTeleport = true -- True in first start of round.
 RoundSystem.isRoundMusicActive = false
 RoundSystem.WinningPlayers = {}
+RoundSystem.CanIntro = true
+RoundSystem.CurrentMap = nil
 
 
 local decrementTime = 5
@@ -57,6 +62,7 @@ RoundSystem.AFKState = {}
 
 function RoundSystem:Init()
 	local playerCount = WaitForPlayers()  -- Connect To UI
+	
 	if playerCount then
 		RoundSystem:StartGame()
 	else
@@ -127,7 +133,7 @@ local function DistributeReward(winningPlayers)
 	if winningPlayers then
 		for _, player in ipairs(winningPlayers) do
 			DataManager.AddWins(player, 1)
-			DataManager.AddCoins(player, 5)
+			DataManager.AddCoins(player, 10)
 			d.NotificationEvent:FireClient(player, 5) -- Coins only 
 		end
 		return {}
@@ -135,7 +141,7 @@ local function DistributeReward(winningPlayers)
 end
 
 function RoundSystem:StartGame()
-	
+	self.CanIntro = true
 	playMusic("Music", "BGM")
 	
 	self.WinningPlayers = DistributeReward(self.WinningPlayers)
@@ -183,7 +189,11 @@ function RoundSystem:StartIntermission()
 	local randomMap = math.random(1, #d.MapTemplateFolder:GetChildren())
 	local map = d.MapTemplateFolder:GetChildren()[randomMap]:Clone()
 	map.Parent = MapsFolder
-	map:PivotTo(mapPos)
+	self.CurrentMap = map
+	
+	local currentPivot = map:GetPivot()
+	local targetCFrame = CFrame.new(-89.676, currentPivot.Y, 0)
+	map:PivotTo(targetCFrame)
 
 	PlayerModule:RagdollAction("restrict")
 	PlayerModule:RagdollAction("delete")
@@ -210,12 +220,11 @@ function RoundSystem:StartIntermission()
 			else
 				-- Normal Countdown
 				sendEvent(1, Timer)
-				PlayerModule:SetPlaying()
 				task.wait(1)
 				Timer -= 1
 			end
 		end
-
+		PlayerModule:SetPlaying()
 		self.IntermissionActive = false
 		self:StartRound()  -- START ROUND
 	end)
@@ -225,8 +234,20 @@ end
 
 -- Updated teleportPlayers in RoundSystem
 local function teleportPlayers(action, targetPlayers)
-	-- Use targetPlayers if provided, otherwise default to all alive players
 	local playersToMove = targetPlayers or PlayerModule:GetAlivePlayers()
+	local MiddlePoint = RoundSystem.CurrentMap.MiddlePoint
+
+	if action == 1 then
+		-- 1. Reset all spawns to "Available" before starting the player loop
+		if RoundSystem.CurrentMap and RoundSystem.CurrentMap:FindFirstChild("Spawns") then
+			for _, part in ipairs(RoundSystem.CurrentMap.Spawns:GetChildren()) do
+				part:SetAttribute("Occupied", false)
+			end
+		else
+			warn("Teleport Error: CurrentMap or Spawns folder missing!")
+			return
+		end
+	end
 
 	for _, player in ipairs(playersToMove) do
 		local character = player.Character
@@ -236,8 +257,29 @@ local function teleportPlayers(action, targetPlayers)
 			hrp.Anchored = true
 
 			if action == 1 then
-				character:PivotTo(mapSpawn.CFrame)
+				-- 2. Find the FIRST available spawn
+				local selectedSpawn = nil
+				local allSpawns = RoundSystem.CurrentMap.Spawns:GetChildren()
+
+				for _, part in ipairs(allSpawns) do
+					if part:GetAttribute("Occupied") == false then
+						selectedSpawn = part
+						part:SetAttribute("Occupied", true) -- Lock it immediately
+						break 
+					end
+				end
+
+				-- 3. Fallback: If map has fewer spawns than players, pick a random one
+				if not selectedSpawn then
+					selectedSpawn = allSpawns[math.random(1, #allSpawns)]
+				end
+
+				character:PivotTo(selectedSpawn.CFrame + Vector3.new(0, 3, 0))
+				local lookAtPos = Vector3.new(MiddlePoint.Position.X, hrp.Position.Y, MiddlePoint.Position.Z)
+				hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
+
 			elseif action == 2 then
+				-- Teleport back to Lobby
 				character:PivotTo(LobbySpawn.CFrame)
 			end
 
@@ -271,23 +313,25 @@ function RoundSystem:StartRound(isSurvive)
 
 	PlayerModule.Checked = false
 	local firedNewRound = false
-	
-	local animTime = 10
-			-- Handle animation
-	while animTime > 0 and self.RoundActive do
-		sendEvent(7, animTime, false)
-			
-		task.wait(1)
-		animTime -= 1
+
+	if self.AllowTeleport == true then teleportPlayers(1) end
+	self.AllowTeleport = false
+
+	if self.isRoundMusicActive == false then print("Playing Music Function") playMusic("Music", "Round") self.isRoundMusicActive = true end -- Play music only when the var is false.
+
+	if self.CanIntro then
+		local animTime = 10
+		while animTime > 0 and self.RoundActive do
+			sendEvent(7, animTime, false)
+			task.wait(1)
+			animTime -= 1
+		end
+		self.CanIntro = false
 	end
 	
 	-- Allow Teleport ONCE and turn it off.
-	if self.AllowTeleport == true then teleportPlayers(1) end
-	self.AllowTeleport = false
 	
 	-- HANDLE RESET ETC.
-	
-	if self.isRoundMusicActive == false then print("Playing Music Function") playMusic("Music", "Round") self.isRoundMusicActive = true end -- Play music only when the var is false.
 	
 		task.spawn(function()
 			while Timer > 0 and self.RoundActive do
@@ -582,7 +626,7 @@ function RoundSystem:determineRoundOptions()
 	elseif aliveCount == 2 then  -- LAST STAND
 		
 		GameModule:ResetRound()
-		self:StartingNewInRound(2, false)
+		self:FinalStand()
 		
 	elseif aliveCount >= 3 then  -- NORMAL ROUND
 		-- Restart Round

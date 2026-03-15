@@ -245,75 +245,84 @@ function DailyReward:HandleClaimed(FrameTable, Day)
 	if not dayNumber then return end
 
 	local ClaimedFrame = FrameTable[dayNumber]
+	if not ClaimedFrame then return end
 
-	-- 1. Mark the CURRENT day as claimed immediately
 	local TextButton = ClaimedFrame:WaitForChild("TextButton")
-	TextButton.Text = "CLAIMED"
-	TextButton:SetAttribute("isLocked", true)
-	TextButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-	TextButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	local StatusLabel = TextButton:FindFirstChild("_Text") -- Using FindFirstChild for safety
+	local ClaimedBG = ClaimedFrame:WaitForChild("Claimed")
 
-	-- 2. Determine the Next Day
-	local nextIndex = dayNumber + 1
-	if nextIndex > #FrameTable then
-		nextIndex = 1 -- Loop back to Day 1 if they finished the week
+	-- 1. INSTANT VISUAL UPDATE
+	if StatusLabel then
+		StatusLabel.Text = "CLAIMED"
+		StatusLabel.TextColor3 = Color3.fromRGB(27, 175, 32) -- Your green color
+	else
+		-- Fallback if the label is actually the button's own text
+		TextButton.Text = "CLAIMED"
 	end
 
-	local nextDayFrame = FrameTable[nextIndex]
+	TextButton:SetAttribute("isLocked", true)
+	TextButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+	ClaimedBG.Visible = true
 
-	-- 3. Start the timer for the NEXT day
+	-- 2. Determine and Start Timer for Next Day
+	local nextIndex = (dayNumber % #FrameTable) + 1
 	local DEFAULT_COOLDOWN = 86400 
 
-	-- Call the timer function manually so the player sees it start
 	self:UpdateTimerUI(dayNumber, FrameTable, DEFAULT_COOLDOWN)
 end
 ------------------------------------------------------------------------------------------------------------------
 
-function DailyReward:UpdateUI(Day ,framesTable, claimedStatus)
-	-- Mark all past days as claimed
+function DailyReward:UpdateUI(Day, framesTable, claimedStatus)
+	-- Iterate through all 7 day frames
 	for index, frame in ipairs(framesTable) do
 		local TextButton = frame:WaitForChild("TextButton")
+		local _Text = TextButton._Text
 		local Veil = frame:WaitForChild("Veil")
+		-- 1. Reference the new Claimed image/frame from your hierarchy
+		local ClaimedBG = frame:WaitForChild("Claimed") 
 
 		if index < Day then
-			-- Past days - already claimed
-			TextButton.Text = "CLAIMED"
+			-- 2. Past days - already claimed
+			_Text.Text = "CLAIMED"
 			TextButton:SetAttribute("isLocked", true)
-			TextButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-			TextButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-			TextButton.UIStroke.Color = Color3.fromRGB(100, 100, 100)
+
+			-- Grey out the button
+			_Text.TextColor3 = Color3.fromRGB(27, 175, 32) 
+
 			Veil.Visible = false
+			-- 3. Make the Claimed image visible
+			ClaimedBG.Visible = true 
 
 		elseif index == Day then
 			-- Current day
 			if claimedStatus then
-				-- Player already claimed today, lock it
-				TextButton.Text = "CLAIMED"
-				TextButton:SetAttribute("isLocked", true)
-				TextButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-				TextButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextButton.UIStroke.Color = Color3.fromRGB(100, 100, 100)
+				-- Player already claimed today, lock it and show claimed status
+				_Text.Text = "CLAIMED"
+				_Text:SetAttribute("isLocked", true)
+				_Text.TextColor3 = Color3.fromRGB(27, 175, 32) 
+
 				Veil.Visible = false
+				ClaimedBG.Visible = true -- Show claimed image
 			else
 				-- Player hasn't claimed today, allow claiming
-				TextButton.Text = "CLAIM"
+				_Text.Text = "CLAIM"
 				TextButton:SetAttribute("isLocked", false)
-				TextButton.BackgroundColor3 = ClaimColor
-				TextButton.UIStroke.Color = ClaimColor
+
 				Veil.Visible = false
+				ClaimedBG.Visible = false -- Hide claimed image
 			end
 
 		else
-			-- FIXED: Future days (locked with veil visible)
-			TextButton.Text = "LOCKED"
+			-- Future days (locked)
+			_Text.Text = "LOCKED"
 			TextButton:SetAttribute("isLocked", true)
-			TextButton.BackgroundColor3 = Color3.fromRGB(229, 50, 19)
-			TextButton.UIStroke.Color = Color3.fromRGB(229, 50, 19)
-			Veil.Visible = true -- Keep veil visible for future days
+			_Text.TextColor3 = Color3.fromRGB(229, 50, 19) -- Red
+
+			Veil.Visible = true -- Keep veil (with countdown) visible
+			ClaimedBG.Visible = false -- Hide claimed image
 		end
 	end
 end
-
 
 local activeTimer = nil -- Variable at the top of your script to track the thread
 

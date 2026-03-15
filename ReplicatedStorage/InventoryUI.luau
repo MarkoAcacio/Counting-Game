@@ -3,6 +3,8 @@ local InventoryUI = {}
 local d = require(game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
 local MusicModule = require(d.Modules:WaitForChild("MusicModule"))
 local GuiModule = require(d.Modules:WaitForChild("GuiModule"))
+local GachaModule= require(d.Modules:WaitForChild("GachaUI"))
+local TweenUtils = require(d.Modules:WaitForChild("TweenUtils"))
 
 InventoryUI.OpenButtons = {}
 InventoryUI.EquipButtons = {}
@@ -29,6 +31,25 @@ InventoryUI.EmoteClones = {}
 InventoryUI.ImageClones = {}
 InventoryUI.DeathClones = {}
 InventoryUI.CountClones = {} -- NEW: For count animations
+
+InventoryUI.ActiveCategory = nil
+InventoryUI.CurrentEquippedDeath = nil -- Track current equipped death
+InventoryUI.CurrentEquippedCount = nil -- Track current equipped count
+InventoryUI.CurrentEquippedEmotes = {} -- Track current equipped emotes (Emote1-4)
+
+-- NEW: Track which case is currently being opened
+InventoryUI.CurrentlyOpeningCase = nil
+
+InventoryUI.Images = {
+	opt1 = {normal = "rbxassetid://82261850428650", selected = "rbxassetid://117541092509512"},
+	opt2 = {normal = "rbxassetid://92505326809050", selected = "rbxassetid://73176336335035"},
+	opt3 = {normal = "rbxassetid://138024768658972", selected = "rbxassetid://74750387412653"},
+
+	Button = {normal = "rbxassetid://108036905139974", selected = "rbxassetid://84999112566304"}
+}
+
+local IDLE_IMAGE = "rbxassetid://YOUR_IDLE_ID"
+local SELECTED_IMAGE = "rbxassetid://YOUR_SELECTED_ID"
 
 local _emoteTemplate
 local _deathTemplate
@@ -74,6 +95,111 @@ function InventoryUI:clearButtonConn()
 
 end
 
+-- NEW: Request equipped items from server
+function InventoryUI:RequestEquippedItems()
+	local success, DeathEquipped, CountEquipped, EmoteConfig = pcall(function()
+		return d.EquippedRequest:InvokeServer()
+	end)
+
+	if success then
+
+		self.CurrentEquippedDeath = DeathEquipped
+		self.CurrentEquippedCount = CountEquipped
+		self.CurrentEquippedEmotes = EmoteConfig or {} -- Store the emote slots config
+
+		-- Update UI to show equipped status
+		self:UpdateEquippedUI()
+	else
+		warn("Failed to get equipped items from server")
+	end
+end
+
+-- NEW: Update the UI to show which items are equipped
+-- NEW: Update the UI to show which items are equipped
+function InventoryUI:UpdateEquippedUI()
+	-- Update Death Animations
+	for deathName, deathData in pairs(self.DeathClones) do
+		local equipButton = deathData.emote:FindFirstChild("Equip")
+		local buttonLabel = equipButton:FindFirstChild("Equip")
+
+		if deathName == self.CurrentEquippedDeath then
+			buttonLabel.Text = "Equipped"
+			equipButton.Image = self.Images.Button.selected
+		else
+			buttonLabel.Text = "Equip"
+			equipButton.Image = self.Images.Button.normal
+		end
+	end
+
+	-- Update Count Animations
+	for countName, countData in pairs(self.CountClones) do
+		local equipButton = countData.emote:FindFirstChild("Equip")
+		local buttonLabel = equipButton:FindFirstChild("Equip")
+
+		if countName == self.CurrentEquippedCount then
+			buttonLabel.Text = "Equipped"
+			equipButton.Image = self.Images.Button.selected
+		else
+			buttonLabel.Text = "Equip"
+			equipButton.Image = self.Images.Button.normal
+		end
+	end
+
+	-- Build reverse lookup table
+	local equippedEmoteNames = {}
+	for slotName, slotData in pairs(self.CurrentEquippedEmotes) do
+		equippedEmoteNames[slotData.EmoteName] = true
+	end
+
+	-- Update Emote Animations
+	for emoteName, emoteData in pairs(self.EmoteClones) do
+		local equipButton = emoteData.emote:FindFirstChild("Equip")
+		local buttonLabel = equipButton:FindFirstChild("Equip")
+
+		if equippedEmoteNames[emoteName] then
+			buttonLabel.Text = "Equipped"
+			equipButton.Image = self.Images.Button.selected
+		else
+			buttonLabel.Text = "Equip"
+			equipButton.Image = self.Images.Button.normal
+		end
+	end
+end
+
+-- NEW: Set a case button to "Opening..." state
+function InventoryUI:SetCaseOpening(caseName, isOpening)
+	if self.CaseClones[caseName] then
+		local openButton = self.CaseClones[caseName].case:FindFirstChild("Open")
+		if openButton then
+			local buttonLabel = openButton:FindFirstChild("Open")
+			if buttonLabel then
+				if isOpening then
+					buttonLabel.Text = "Opening..."
+					self.CurrentlyOpeningCase = caseName
+				else
+					buttonLabel.Text = "Open"
+					if self.CurrentlyOpeningCase == caseName then
+						self.CurrentlyOpeningCase = nil
+					end
+				end
+			end
+		end
+	end
+end
+
+-- NEW: Reset all case buttons to normal state
+function InventoryUI:ResetAllCaseButtons()
+	for caseName, caseData in pairs(self.CaseClones) do
+		local openButton = caseData.case:FindFirstChild("Open")
+		if openButton then
+			local buttonLabel = openButton:FindFirstChild("Open")
+			if buttonLabel and buttonLabel.Text == "Opening..." then
+				buttonLabel.Text = "Open"
+			end
+		end
+	end
+	self.CurrentlyOpeningCase = nil
+end
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -85,6 +211,15 @@ function InventoryUI:Init()
 
 	self:CloneTemplate(InventoryFrame)
 	self:LoadButtons()
+
+	-- NEW: Request equipped items after initialization
+	self:RequestEquippedItems()
+
+	-- NEW: Listen for when gacha spinning ends to reset button states
+	table.insert(self.Connections, d.localPlayer.CharacterRemoving:Connect(function()
+		-- Reset all case buttons when player dies
+		self:ResetAllCaseButtons()
+	end))
 end
 
 
@@ -104,18 +239,22 @@ local db = false
 local isLoaded = false
 function InventoryUI:HandleListeners(InventoryBtn : ImageButton, InventoryFrame : Frame, SF, DF)
 
-	local CaseCategory = InventoryFrame:WaitForChild("Cases")
-	local EmoteCategory = InventoryFrame:WaitForChild("Emotes")
-	local AllCategory = InventoryFrame:WaitForChild("All")
-	local CategoryText = InventoryFrame:WaitForChild("CategoryText")
+
+	local CaseCategory = InventoryFrame.CategoryFrame.opt2
+	local EmoteCategory = InventoryFrame.CategoryFrame.opt1
+	local AllCategory = InventoryFrame.CategoryFrame.opt3
 	local ExitBtn = InventoryFrame:WaitForChild("Exit")
-	
-	self:ApplyButtonEffect(InventoryBtn)
-	self:ApplyButtonEffect(ExitBtn)
+
+	TweenUtils:TweenButton(InventoryBtn)
+	TweenUtils:TweenButton(ExitBtn)
+
 
 	self:ApplyCategoryEffect(CaseCategory)
 	self:ApplyCategoryEffect(EmoteCategory)
 	self:ApplyCategoryEffect(AllCategory)
+
+	-- NEW: Set default category to "All" on initialization
+	self:SetCategoryActive(AllCategory)
 
 	local normalSize = InventoryBtn.Size
 	local exitSize = InventoryFrame.Exit.Size
@@ -130,7 +269,6 @@ function InventoryUI:HandleListeners(InventoryBtn : ImageButton, InventoryFrame 
 			self:parseData(data)
 			self:UpdateInventory()
 		else
-			print(data)
 			self:parseData(data)
 			isLoaded = true
 		end
@@ -171,17 +309,20 @@ function InventoryUI:HandleListeners(InventoryBtn : ImageButton, InventoryFrame 
 
 	table.insert(self.Connections, CaseCategory.MouseButton1Click:Connect(function()
 		MusicModule:PlaySFX("Click")
-		self:ToggleCategory("Case", CategoryText)
+		self:SetCategoryActive(CaseCategory)  -- Set active BEFORE toggle
+		self:ToggleCategory("Case")
 	end))
 
 	table.insert(self.Connections, EmoteCategory.MouseButton1Click:Connect(function()
 		MusicModule:PlaySFX("Click")
-		self:ToggleCategory("Emote", CategoryText)
+		self:SetCategoryActive(EmoteCategory)  -- Set active BEFORE toggle
+		self:ToggleCategory("Emote")
 	end))
 
 	table.insert(self.Connections, AllCategory.MouseButton1Click:Connect(function()
 		MusicModule:PlaySFX("Click")
-		self:ToggleCategory("All", CategoryText)
+		self:SetCategoryActive(AllCategory)  -- Set active BEFORE toggle
+		self:ToggleCategory("All")
 	end))
 
 	----- ExitButton -----
@@ -216,8 +357,8 @@ function InventoryUI:_Buttons()
 		local parentFrame = buttons.Parent
 		local itemName = parentFrame.Name
 		local Slot = parentFrame:FindFirstChild("Slot") -- Use FindFirstChild for safety
-		
-			self:ApplyButtonEffect(buttons)
+
+		self:ApplyButtonEffect(buttons)
 
 		-- 1. Main Equip Button Click
 		table.insert(self._ButtonConn, buttons.MouseButton1Click:Connect(function()
@@ -228,7 +369,12 @@ function InventoryUI:_Buttons()
 				local itemID = self.DeathClones[itemName].emoteID
 				print("Attempting to Equip Death: " .. itemName)
 
-				d.EquipDeath:FireServer(itemName, itemID) 
+				d.EquipDeath:FireServer(itemName, itemID)
+
+				-- NEW: Update equipped tracking
+				self.CurrentEquippedDeath = tostring(itemName)
+				self:UpdateEquippedUI()
+
 				return -- Stop here so the Slot doesn't open
 			end
 
@@ -238,6 +384,11 @@ function InventoryUI:_Buttons()
 				print("Attempting to Equip Count: " .. itemName)
 
 				d.EquipCount:FireServer(itemName, itemID)
+
+				-- NEW: Update equipped tracking
+				self.CurrentEquippedCount = tostring(itemName)
+				self:UpdateEquippedUI()
+
 				return -- Stop here
 			end
 
@@ -260,7 +411,7 @@ function InventoryUI:_Buttons()
 						if emoteData then
 							local emoteID = emoteData.emoteID
 
-							-- Update Local UI
+							-- Update Local UI data for internal systems
 							self.EquipEmote = {
 								slotName = slotName,
 								emoteName = itemName,
@@ -271,6 +422,20 @@ function InventoryUI:_Buttons()
 							-- Save to Server
 							d.SaveEmoteSlot:FireServer(slotName, itemName, emoteID)
 							Slot.Visible = false
+
+							-- UPDATE TRACKING: Update your local table so the UI knows what's equipped
+							if not self.CurrentEquippedEmotes then
+								self.CurrentEquippedEmotes = {}
+							end
+
+							-- Record that this slot now contains this emote
+							self.CurrentEquippedEmotes[slotName] = {
+								EmoteName = itemName, -- MATCH THIS KEY with your check in UpdateEquippedUI
+								EmoteID = emoteID
+							}
+
+							-- REFRESH UI: This forces all buttons to check their equipped status
+							self:UpdateEquippedUI()
 						end
 					end))
 				elseif child:IsA("ImageButton") then -- Exit button for slot
@@ -284,13 +449,48 @@ function InventoryUI:_Buttons()
 
 	-- OPEN BUTTON (Cases)
 	for _, buttons in pairs(self.OpenButtons) do
-			self:ApplyButtonEffect(buttons)
+		self:ApplyButtonEffect(buttons)
 		table.insert(self._ButtonConn, buttons.MouseButton1Click:Connect(function()
+			local caseName = buttons.Parent.Name
+
+			-- Check if already opening a case OR if gacha is spinning
+			if self.CurrentlyOpeningCase ~= nil or GachaModule.Spinning == true then
+				warn("WAIT FOR CURRENT CASE TO FINISH OPENING")
+				return
+			end
+
+			-- Check if this specific button says "Opening..."
+			local buttonLabel = buttons:FindFirstChild("Open")
+			if buttonLabel and buttonLabel.Text == "Opening..." then
+				warn("THIS CASE IS ALREADY BEING OPENED")
+				return
+			end
+
 			MusicModule:PlaySFX("Click")
-			
-			d.CaseOpen:FireServer()
-			
-			-- Your opening logic here
+
+			-- Set button to "Opening..." state
+			self:SetCaseOpening(caseName, true)
+
+			-- Fire the server event
+			d.CaseOpen:FireServer(caseName)
+
+			-- NEW: Monitor GachaModule.Spinning to reset button when done
+			task.spawn(function()
+				-- Wait for spinning to start (in case there's a delay)
+				local timeout = 0
+				while not GachaModule.Spinning and timeout < 50 do
+					task.wait(0.1)
+					timeout = timeout + 1
+				end
+
+				-- Now wait for it to finish
+				while GachaModule.Spinning do
+					task.wait(0.1)
+				end
+
+				-- Reset button state
+				self:SetCaseOpening(caseName, false)
+			end)
 		end))
 	end
 end
@@ -301,28 +501,22 @@ function InventoryUI:LoadButtons()
 
 	for caseName, slotData in pairs(self.CaseClones) do
 		local Button = slotData.case:WaitForChild("Open")
-		if Button:IsA("TextButton") then
+		if Button:IsA("ImageButton") then
 			table.insert(self.OpenButtons, Button)
 		end
 	end
 
-	for imageName, imageData in pairs(self.ImageClones) do
-		local Button = imageData.image:WaitForChild("Equip")
-		if Button:IsA("TextButton") then
-			table.insert(self.EquipImageBtn, Button)
-		end
-	end
 
 	for emoteName, emoteData in pairs(self.EmoteClones) do
 		local Button = emoteData.emote:WaitForChild("Equip")
-		if Button:IsA("TextButton") then
+		if Button:IsA("ImageButton") then
 			table.insert(self.EquipButtons, Button)
 		end
 	end
 
 	for deathName, deathData in pairs(self.DeathClones or {}) do
 		local Button = deathData.emote:WaitForChild("Equip")
-		if Button:IsA("TextButton") then
+		if Button:IsA("ImageButton") then
 			table.insert(self.EquipButtons, Button) 
 		end
 	end
@@ -330,7 +524,7 @@ function InventoryUI:LoadButtons()
 	-- NEW: Load Count Animation Buttons
 	for countName, countData in pairs(self.CountClones or {}) do
 		local Button = countData.emote:WaitForChild("Equip")
-		if Button:IsA("TextButton") then
+		if Button:IsA("ImageButton") then
 			table.insert(self.EquipButtons, Button)
 		end
 	end
@@ -456,6 +650,7 @@ function InventoryUI:UpdateInventory()
 
 	if newlyAdded then
 		self:LoadButtons() -- Re-scan and connect buttons immediately
+		self:RequestEquippedItems() -- NEW: Update equipped status for new items
 	end
 end
 
@@ -514,19 +709,16 @@ function InventoryUI:ToggleCategory(Category : string, CategoryText : TextLabel)
 		setVisibility(self.DeathClones, false)
 		setVisibility(self.CountClones, false) -- NEW
 		setVisibility(self.CaseClones, true)
-		CategoryText.Text = "Cases"
 	elseif Category == "Emote" then
 		setVisibility(self.CaseClones, false)
 		setVisibility(self.EmoteClones, true)
 		setVisibility(self.DeathClones, true)
 		setVisibility(self.CountClones, true) -- NEW: Counts visible in Emote tab
-		CategoryText.Text = "Emotes"
 	elseif Category == "All" then
 		setVisibility(self.CaseClones, true)
 		setVisibility(self.EmoteClones, true)
 		setVisibility(self.DeathClones, true)
 		setVisibility(self.CountClones, true) -- NEW
-		CategoryText.Text = "All"
 	end
 end
 
@@ -556,34 +748,48 @@ end
 
 local tweenCache = {}
 
-function InventoryUI:ApplyCategoryEffect(button)
-	local ParentFrame = button.Parent
-	-- Find the specific sibling based on your mapping
-	local iconName = (button.Name == "Emotes" and "opt1") or 
-		(button.Name == "Cases" and "opt2") or 
-		(button.Name == "All" and "opt3")
+function InventoryUI:SetCategoryActive(clickedButton)
+	local CategoryFrame = clickedButton.Parent -- Get the CategoryFrame
 
-	local icon = ParentFrame:FindFirstChild(iconName)
+	-- Reset ALL category buttons to their normal state
+	for _, button in pairs(CategoryFrame:GetChildren()) do
+		if button:IsA("ImageButton") and self.Images[button.Name] then
+			button.Image = self.Images[button.Name].normal
+		end
+	end
+
+	-- Set the clicked button to selected state
+	if self.Images[clickedButton.Name] then
+		clickedButton.Image = self.Images[clickedButton.Name].selected
+		self.ActiveCategory = clickedButton.Name -- Track the active category
+	end
+end
+
+function InventoryUI:ApplyCategoryEffect(button)
+	-- The button is opt1, opt2, or opt3 (ImageButton)
+	-- We check for a TextLabel inside it (Emotes, Cases, or All)
+	local label = button:FindFirstChildWhichIsA("TextLabel")
 
 	-- 1. Cache original sizes
 	if not tweenCache[button] then tweenCache[button] = button.Size end
-	if icon and not tweenCache[icon] then tweenCache[icon] = icon.Size end
+	if label and not tweenCache[label] then tweenCache[label] = label.Size end
 
-	local normalSize = tweenCache[button]
-	local sizeTweenInfo = d.HoverInfo or TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local btnNormal = tweenCache[button]
+
+	local sizeTweenInfo = d.HoverInfo or TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local isHovering = false
 
-	-- 2. Scaling Logic for Sibling Hierarchy
+	-- 2. Scaling Logic
 	local function scaleCategory(multiplier)
-		-- Scale the Button
-		local targetBtn = UDim2.new(normalSize.X.Scale * multiplier, 0, normalSize.Y.Scale * multiplier, 0)
+		-- Scale the ImageButton
+		local targetBtn = UDim2.new(btnNormal.X.Scale * multiplier, 0, btnNormal.Y.Scale * multiplier, 0)
 		d.TweenService:Create(button, sizeTweenInfo, {Size = targetBtn}):Play()
 
-		-- Scale the Sibling Icon
-		if icon and tweenCache[icon] then
-			local iconNormal = tweenCache[icon]
-			local targetIcon = UDim2.new(iconNormal.X.Scale * multiplier, 0, iconNormal.Y.Scale * multiplier, 0)
-			d.TweenService:Create(icon, sizeTweenInfo, {Size = targetIcon}):Play()
+		-- Scale the Label inside if it exists
+		if label and tweenCache[label] then
+			local labelNormal = tweenCache[label]
+			local targetLabel = UDim2.new(labelNormal.X.Scale * multiplier, 0, labelNormal.Y.Scale * multiplier, 0)
+			d.TweenService:Create(label, sizeTweenInfo, {Size = targetLabel}):Play()
 		end
 	end
 
@@ -597,6 +803,13 @@ function InventoryUI:ApplyCategoryEffect(button)
 	table.insert(self.Connections, button.MouseLeave:Connect(function()
 		isHovering = false
 		scaleCategory(1)
+
+		-- IMPORTANT: Reset to the correct image state based on if it's active
+		if self.ActiveCategory == button.Name then
+			button.Image = self.Images[button.Name].selected
+		else
+			button.Image = self.Images[button.Name].normal
+		end
 	end))
 
 	table.insert(self.Connections, button.MouseButton1Down:Connect(function()
@@ -608,58 +821,49 @@ function InventoryUI:ApplyCategoryEffect(button)
 	end))
 end
 
-function InventoryUI:ApplyButtonEffect(button)
-	local ParentFrame = button.Parent
-	-- Find siblings
-	local btnImage = ParentFrame:FindFirstChild("btn")
-	local iconImage = ParentFrame:FindFirstChild("icon")
 
-	-- 1. Cache sizes for everything that exists
-	local targets = {button, btnImage, iconImage}
-	for _, obj in ipairs(targets) do
-		if obj and not tweenCache[obj] then
-			tweenCache[obj] = obj.Size
-		end
+function InventoryUI:ApplyButtonEffect(button)
+	-- 1. Cache only the button size
+	if not tweenCache[button] then
+		tweenCache[button] = button.Size
 	end
 
 	-- 2. Configuration
+	-- Using 'Back' easing for hover gives it that bouncy, premium feel
 	local sizeTweenInfo = d.HoverInfo or TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	local clickTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local clickTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local isHovering = false
 
+	local originalSize = tweenCache[button]
+
 	-- 3. Unified Scaling Logic
-	local function scaleElements(multiplier, info)
-		for _, obj in ipairs(targets) do
-			if obj and tweenCache[obj] then
-				local originalSize = tweenCache[obj]
-				local newSize = UDim2.new(
-					originalSize.X.Scale * multiplier, 0, 
-					originalSize.Y.Scale * multiplier, 0
-				)
-				d.TweenService:Create(obj, info, {Size = newSize}):Play()
-			end
-		end
+	local function scaleButton(multiplier, info)
+		local newSize = UDim2.new(
+			originalSize.X.Scale * multiplier, 0, 
+			originalSize.Y.Scale * multiplier, 0
+		)
+		d.TweenService:Create(button, info, {Size = newSize}):Play()
 	end
 
 	-- 4. Triggers
 	table.insert(self.Connections, button.MouseEnter:Connect(function()
 		isHovering = true
 		MusicModule:PlaySFX("Hover")
-		scaleElements(1.15, sizeTweenInfo) -- Hover Grow
+		scaleButton(1.1, sizeTweenInfo) -- Grow 10%
 	end))
 
 	table.insert(self.Connections, button.MouseLeave:Connect(function()
 		isHovering = false
-		scaleElements(1, sizeTweenInfo) -- Return to Normal
+		scaleButton(1, sizeTweenInfo) -- Reset
 	end))
 
 	table.insert(self.Connections, button.MouseButton1Down:Connect(function()
-		scaleElements(0.9, clickTweenInfo) -- Click Shrink
+		scaleButton(0.9, clickTweenInfo) -- Shrink on click
 	end))
 
 	table.insert(self.Connections, button.MouseButton1Up:Connect(function()
-		local targetMultiplier = isHovering and 1.15 or 1
-		scaleElements(targetMultiplier, clickTweenInfo)
+		local targetMultiplier = isHovering and 1.1 or 1
+		scaleButton(targetMultiplier, clickTweenInfo)
 	end))
 end
 ------------------------------------------------------------------------------------------------------------------------------------

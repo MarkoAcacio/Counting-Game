@@ -23,6 +23,7 @@ local NotificationsEvent = EventsFolder:WaitForChild("NotificationEvent")
 local ShopProperties = require(ModulesFolder:WaitForChild("Shop"):WaitForChild("ShopProperties"))
 local DataManager = require(SSS:WaitForChild("Data"):WaitForChild("DataManager"))
 local InventoryHandler = require(ModulesFolder:WaitForChild("InventoryHandler"))
+local CaseModule = require(ModulesFolder:WaitForChild("Interactables"):WaitForChild("CaseModule"))
 
 -- Variables & Functions
 ShopHandler.PendingGifts = {}  -- Gifting
@@ -115,8 +116,12 @@ function ShopHandler:RewardPlayer(PlayerID, ProductID)
 		caseName = currentCase,
 		caseIncrement = nil
 	}
+	
+	local idReceived = tonumber(ProductID)
+	local targetID = tonumber(ShopProperties.DevProducts.x1CaseIns)
 
 	local player = PlayerService:GetPlayerByUserId(PlayerID)
+	print(ProductID)
 	print(player)
 
 	-- Cases
@@ -124,6 +129,11 @@ function ShopHandler:RewardPlayer(PlayerID, ProductID)
 		caseData.caseIncrement = 1
 		print("Bought x1")
 		InventoryHandler:AddToInventory(player, "case", caseData)
+		d.SFXEvent:FireClient(player, "Purchase2")
+		
+	elseif idReceived == targetID then
+		print("asdasd")
+		CaseModule.OpenPremiumCase(player, 1)
 		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.x2Case then
 		caseData.caseIncrement = 2
@@ -138,15 +148,15 @@ function ShopHandler:RewardPlayer(PlayerID, ProductID)
 
 		-- Coins
 	elseif ProductID == ShopProperties.DevProducts.coin1 then
-		DataManager.AddCoins(player, 500)
+		DataManager.AddCoinsProduct(player, 500)
 		DataManager.SendCurrencies(player)
 		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.coin2 then
-		DataManager.AddCoins(player, 2500)
+		DataManager.AddCoinsProduct(player, 2500)
 		DataManager.SendCurrencies(player)
 		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.coin3 then
-		DataManager.AddCoins(player, 1200)
+		DataManager.AddCoinsProduct(player, 1200)
 		DataManager.SendCurrencies(player)
 		d.SFXEvent:FireClient(player, "Purchase2")
 

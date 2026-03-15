@@ -129,7 +129,8 @@ local function HoverCases(Normal, Premium)
 
 	-- 3. Tween specifically to (originalY + hoverHeight)
 	local tweenN = d.TweenService:Create(Normal, HoverInfo, {
-		Position = Vector3.new(Normal.Position.X, originalY + hoverHeight, Normal.Position.Z)
+		Position = Vector3.new(Normal.Position.X, originalY + hoverHeight, Normal.Position.Z),
+		--Rotation = Normal.CFrame * CFrame.Angles(0, math.rad(180), 0)
 	})
 
 	local tweenP = d.TweenService:Create(Premium, HoverInfo, {
@@ -161,14 +162,17 @@ function BillboardService:SetupBillboards(casesData)
 
 	local NF = BillboardFolder.NormalCase.Frame
 	local PF = BillboardFolder.PremiumCase.Frame
-	
+
 	local allData = self:GetData()
 
 	if allData then
-		if allData.Normal then
+		-- Check for Normal Case data
+		if allData.Normal and allData.Normal.Items then
 			CloneTemplate(NF, allData.Normal.Items)
 		end
-		if allData.Premium then
+
+		-- Check for Premium Case data (Accepts "Premium" key containing "PremiumPrizes")
+		if allData.Premium and allData.Premium.Items then
 			CloneTemplate(PF, allData.Premium.Items)
 		end
 	end

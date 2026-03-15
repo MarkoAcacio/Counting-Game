@@ -10,6 +10,10 @@ local conn = {}
 local music
 local sfx
 
+local isMuted = false
+
+local activeEmotes = {}
+
 ------------------------------------------------------------------------------------------------------------------
 
 local function fadeIn(sound, duration, volumeGoal)
@@ -77,6 +81,22 @@ function MusicModule:Init()
 	
 end
 
+
+
+function MusicModule:ToggleMute()
+	isMuted = not isMuted
+	
+	if music then
+		-- If we just muted, fade out current music to 0
+		-- If we unmuted, fade back to the standard BGM volume (0.2 in your code)
+		local targetVol = isMuted and 0 or 0.2
+		d.TweenService:Create(music, TweenInfo.new(0.5), {Volume = targetVol}):Play()
+	end
+
+	return isMuted
+end
+
+
 function MusicModule:PlayMusic(musicType : string)
 	
 	
@@ -142,6 +162,10 @@ function MusicModule:PlaySFX(sfxType : string)
 		sfx = d.SFXFolder:WaitForChild("winSFX")
 		sfx.Volume = 2
 		if sfx then sfx:Play() end
+	elseif sfxType == "Interact" then
+		sfx = d.SFXFolder:WaitForChild("Interact")
+		sfx.Volume = 2
+		if sfx then sfx:Play() end
 	elseif sfxType == "Notif" then
 		sfx = d.SFXFolder:WaitForChild("notif")
 		sfx.Volume = 2
@@ -185,6 +209,45 @@ function MusicModule:PlaySFX(sfxType : string)
 	
 end
 
+
+
+local function playLoopSection(soundTemplate, parent, startTime, endTime, fadeTime, player)
+	local function createAndFade()
+		-- Check if we should stop looping
+		if not parent or not parent.Parent or not activeEmotes[player] then 
+			return 
+		end
+
+		local sound = soundTemplate:Clone()
+		sound.Name = "EmoteSound"
+		sound.Parent = parent
+		sound.TimePosition = startTime
+		sound.Volume = 0
+		sound.RollOffMaxDistance = 100
+		sound.RollOffMode = Enum.RollOffMode.Linear
+		sound:Play()
+
+		d.TweenService:Create(sound, TweenInfo.new(fadeTime), {Volume = 0.5}):Play()
+
+		task.delay(endTime - startTime - fadeTime, function()
+			-- Check if still active before looping
+			if sound and sound.Parent == parent and activeEmotes[player] then
+				createAndFade()
+				local outTween = d.TweenService:Create(sound, TweenInfo.new(fadeTime), {Volume = 0})
+				outTween:Play()
+				outTween.Completed:Wait()
+				sound:Destroy()
+			end
+		end)
+	end
+	createAndFade()
+end
+
+
+function MusicModule:PlayEmoteMusic(hrp : Part?, soundObject : Sound?)
+
+	
+end
 
 
 return MusicModule

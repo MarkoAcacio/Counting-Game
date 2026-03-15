@@ -65,9 +65,7 @@ end
 ------------------------------------------------------------------------------------------------------------------
 
 HandleReward = function(Player,Day, cooldownTime)
-	print("HandleReward")
-	print("Day : ", Day)
-	print("Cooldown : ", cooldownTime)
+	
 	
 	local claimStatus = DataManager.getClaimed(Player)
 	

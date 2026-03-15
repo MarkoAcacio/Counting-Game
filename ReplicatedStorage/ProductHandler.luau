@@ -18,10 +18,15 @@ function ProductHandler:Init()
 	-- ACTIONS LIST : NoMoneyNormal, NoMoneyPremium, SkipChestTimer
 
 	
-	d.PromptEvent.OnClientEvent:Connect(function()
-		d.AvatarService:PromptSetFavorite(72311304436842, 1, true)
-		ProductHandler:PromptUserJoinGroup()
-		d.PromptEvent:fireServer()
+	d.PromptEvent.OnClientEvent:Connect(function(fav : boolean)
+		
+		if fav then
+			d.AvatarService:PromptSetFavorite(72311304436842, 1, true)
+			ProductHandler:PromptUserJoinGroup()
+			d.PromptEvent:fireServer()
+		else
+			ProductHandler:PromptUserJoinGroup()
+		end
 	end)
 	
 	d.ProductEvent.OnClientEvent:Connect(function(type_, action : string)

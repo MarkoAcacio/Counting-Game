@@ -1,21 +1,20 @@
 local GuiModule = {}
 
+local d = require(game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
+
 -- Services
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 
 -- Folders
-local EventsFolder = ReplicatedStorage:WaitForChild("Events")
-local ModulesFolder = ReplicatedStorage:WaitForChild("Modules")
+local EventsFolder = d.ReplicatedStorage:WaitForChild("Events")
+local ModulesFolder = d.ReplicatedStorage:WaitForChild("Modules")
+local TweenUtils = require(d.Modules:WaitForChild("TweenUtils"))
 
 -- Modules
 local MusicModule = require(ModulesFolder:WaitForChild("MusicModule"))
 local d = require(ModulesFolder:WaitForChild("Directory"))
 
 -- Variables & Functions & Events
-local localPlayer = Players.LocalPlayer
-local RoundEvent = EventsFolder:WaitForChild("RoundEvent")
+
 
 local HandleRoundUI
 local HandleButtonUI
@@ -38,6 +37,8 @@ GuiModule.FramesValue = {DF = false, IF = false, SF = false}
 local lastRoundState = 0  -- tracks the previous round state
 local animPlay = false
 local finishAnim = false
+local clicked = false
+local playedIntro = false
 
 -- Configas
 
@@ -66,13 +67,10 @@ NOTES:
 	
 ]]
 
-local clicked = false
-local playedIntro = false
-
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
 local function GetGui()
-	local screenGui = localPlayer:WaitForChild("PlayerGui"):WaitForChild("UI"):WaitForChild("ScreenGui")
+	local screenGui = d.localPlayer:WaitForChild("PlayerGui"):WaitForChild("UI"):WaitForChild("ScreenGui")
 	screenGui.ResetOnSpawn = false
 	local roundFrame = screenGui:WaitForChild("RoundFrame")
 	local buttonFrame = screenGui:WaitForChild("ButtonFrame")
@@ -87,38 +85,53 @@ local function GetGui()
 	return screenGui, roundFrame, buttonFrame, countButton, roundLabel, leftFrame, finalStandButton, LastStandFrame, CurrencyFrame, EmoteWheel
 end
 
+local function resetStates()
+	clicked = false
+	playedIntro = false
+	animPlay = false
+	finishAnim = false
+	lastRoundState = 0
+end
 
 
 function GuiModule:Init()  -- Makes a Listener ONCE
-	
+
+	-- Reset states on init (important for respawns)
+	resetStates()
+
 	if roundConnection then
 		roundConnection:Disconnect()
 	end
 	self:ChatVIP()
 	self:HandleButtonListeners()
-	self:SetupTweens()
 
-	
-	RoundEvent.OnClientEvent:Connect(function(RoundData, PlayersDict)
-		local playerData = PlayersDict[tostring(localPlayer.UserId)]
+
+	d.RoundEvent.OnClientEvent:Connect(function(RoundData, PlayersDict)
+		local playerData = PlayersDict[tostring(d.localPlayer.UserId)]
 		HandleRoundUI(RoundData, playerData)
 	end)
-	
+
 	d.CurrencyEvent.OnClientEvent:Connect(function(CurrencyTable)
 		self:SetCurrencyValues(CurrencyTable)
 	end)
-	
+
 	ChestEvent.OnClientEvent:Connect(function(cooldown) -- CHEST UI
 		HandleCaseChestUI(cooldown)
 	end)
-end
 
+	-- NEW: Reset states when player respawns
+	d.localPlayer.CharacterAdded:Connect(function()
+		resetStates()
+	end)
+end
 
 -- ROUNDTYPE 1 : Normal Round
 -- ROUNDTYPE 2 : Final Stand
 
 function GuiModule:HandleButtonListeners()
 	local ScreenGui,RoundFrame, ButtonFrame, CountButton, RoundLabel, leftFrame, finalStandButton, LastStandFrame ,CurrencyFrame, EmoteWheel = GetGui()
+		
+		local CountText = CountButton:WaitForChild("Text")
 		
 	CountButton.MouseButton1Click:Connect(function() -- NORMAL ROUND
 		if clicked then return end
@@ -127,11 +140,10 @@ function GuiModule:HandleButtonListeners()
 		finalStandButton.Interactable = false
 
 		clicked = true
-		CountButton.Interactable = false
+		CountText.Interactable = false
 		ButtonEvent:FireServer(1) 
 
-		CountButton.Text = "Wait..."
-		CountButton.BackgroundColor3 = Color3.new(1, 0, 0)
+		CountText.Text = "CLICKED"
 	end)
 	
 	finalStandButton.MouseButton1Click:Connect(function()  -- FINAL STAND
@@ -139,29 +151,6 @@ function GuiModule:HandleButtonListeners()
 		ButtonEvent:FireServer(2)
 		task.wait(0.1)
 	end)
-	
-	table.insert(connections, CurrencyFrame.AFK.MouseButton1Click:Connect(function()
-		-- Final safety check: If a round is active, ignore the click
-		local isRoundActive = (lastRoundState ~= 1 and lastRoundState ~= 67 and lastRoundState ~= 0)
-
-		if isRoundActive then
-			return -- Silent return since the button shouldn't even be visible
-		end
-
-		MusicModule:PlaySFX("Click")
-
-		local success, isAFK = pcall(function()
-			return d.ToggleAFK:InvokeServer()
-		end)
-
-		if success then
-			if isAFK then
-				CurrencyFrame.AFK.BackgroundColor3 = Color3.fromRGB(200, 0, 0) -- Red
-			else
-				CurrencyFrame.AFK.BackgroundColor3 = Color3.fromRGB(60, 229, 48) -- Green
-			end
-		end
-	end))
 	
 end
 
@@ -172,18 +161,16 @@ function GuiModule:ChatVIP()
 	TextChatService.OnIncomingMessage = function(message: TextChatMessage)
 		local properties = Instance.new("TextChatMessageProperties")
 
-		-- Ensure the message came from a real player
 		if message.TextSource then
-			local sender = Players:GetPlayerByUserId(message.TextSource.UserId)
+			local sender = d.PlayerService:GetPlayerByUserId(message.TextSource.UserId)
 
-			-- CHECK FOR VIP STATUS HERE
-			-- Example: Checking a GamePass or a specific Attribute
-			local isVIP = sender:GetAttribute("IsVIP") == true 
-			-- OR: sender:IsInGroup(12345) 
+			-- FIX: Ensure sender exists AND is an Instance (not a table)
+			if sender and typeof(sender) == "Instance" then
+				local isVIP = sender:GetAttribute("IsVIP") == true 
 
-			if isVIP then
-				-- We use Rich Text to color the tag and the name
-				properties.PrefixText = "<font color='#FFD700'>[⭐ VIP]</font> " .. message.PrefixText
+				if isVIP then
+					properties.PrefixText = "<font color='#FFD700'>[⭐ VIP]</font> " .. message.PrefixText
+				end
 			end
 		end
 
@@ -199,6 +186,9 @@ HandleRoundUI = function(RoundData, PlayersData)
 	RoundFrame.Visible = true
 	lastRoundState = RoundData.State
 	
+	local RoundUIStroke = RoundLabel:FindFirstChild("UIStroke")
+	local CountText = CountButton:WaitForChild("Text")
+	
 	-- Detect new InRound
 	if RoundData.State == 2 and RoundData.newRound or RoundData.State == 6 then
 		clicked = false  -- reset debounce at the start of the round
@@ -208,27 +198,23 @@ HandleRoundUI = function(RoundData, PlayersData)
 		clicked = false
 		ButtonFrame.Visible = false
 		RoundLabel.Text = UiText.LoadingRound
-		CurrencyFrame.AFK.Visible = true
 	elseif RoundData.State == 67 then  -- WAITING FOR PLAYERS
 		clicked = false
 		ButtonFrame.Visible = false
-		CurrencyFrame.AFK.Visible = true
 		RoundLabel.Text = UiText.Waiting
 	elseif RoundData.State == 69 then  -- Disable Button for the player.
 		clicked = false
 		ButtonFrame.Visible = false
-		CurrencyFrame.AFK.Visible = true
 		RoundLabel.Text = UiText.Waiting
 	elseif RoundData.State == 1 then
 		finishAnim = false
 		animPlay = false
 		clicked = false
-		CurrencyFrame.AFK.Visible = true
 		RoundLabel.Text = UiText.Intermission .. RoundData.Time
 	elseif RoundData.State == 2 then
 		RoundLabel.TextTransparency = 0
+		RoundUIStroke.Transparency = 0
 		RoundLabel.Text = UiText.InRound .. RoundData.Time
-		CurrencyFrame.AFK.Visible = false
 		
 		if PlayersData and PlayersData.Alive and not PlayersData.Counted and PlayersData.isPlaying then
 			HandleButtonUI(CountButton, ButtonFrame, finalStandButton,"normalRound")
@@ -237,20 +223,16 @@ HandleRoundUI = function(RoundData, PlayersData)
 	elseif RoundData.State == 3 then
 		RoundLabel.Text = UiText.NewInRound .. RoundData.Time
 		ButtonFrame.Visible = false
-		CurrencyFrame.AFK.Visible = false
 	elseif RoundData.State == 4 then
 		RoundLabel.Text = UiText.Eliminated .. RoundData.Time
 		ButtonFrame.Visible = false
-		CurrencyFrame.AFK.Visible = false
 	elseif RoundData.State == 5 then
 		RoundLabel.Text = UiText.Win .. RoundData.Time
 		
 		ButtonFrame.Visible = false
-		CurrencyFrame.AFK.Visible = false
 	elseif RoundData.State == 6 then
 		RoundLabel.Text = UiText.LastStand .. RoundData.Time
 		ButtonFrame.Visible = false
-		CurrencyFrame.AFK.Visible = false
 		
 		if animPlay == false then
 			animPlay = true
@@ -267,13 +249,13 @@ HandleRoundUI = function(RoundData, PlayersData)
 	elseif RoundData.State == 7 then
 		
 		RoundLabel.TextTransparency = 1
+		RoundUIStroke.Transparency = 1
 		if RoundData.Time <= 10 then
 			if not playedIntro then
 				playedIntro = true
 				GuiModule:IntroAnim(ScreenGui)
 			end
 		end
-		CurrencyFrame.AFK.Visible = false
 		
 	else
 		warn("Error | RoundData.State")
@@ -288,6 +270,10 @@ end
 HandleButtonUI = function(CountButton, ButtonFrame, finalStandButton, Action : string)
 	if clicked then return end
 	
+	TweenUtils:TweenButton(CountButton)
+	TweenUtils:TweenButton(finalStandButton)
+	local CountText = CountButton:FindFirstChild("Text")
+	
 	ButtonFrame.Visible = true
 	
 	if Action == "normalRound" then
@@ -296,10 +282,9 @@ HandleButtonUI = function(CountButton, ButtonFrame, finalStandButton, Action : s
 		finalStandButton.Interactable = false
 		
 		CountButton.Visible = true	
-		CountButton.Text = "Count"
 		CountButton.Interactable = true
-		CountButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-		CountButton.BackgroundColor3 = Color3.fromRGB(255, 217, 66)  -- yellow
+		CountText.Text = "Count"
+		CountText.TextColor3 = Color3.fromRGB(255, 255, 255)
 		
 	elseif Action == "lastStand" then
 		
@@ -353,7 +338,7 @@ end
 
 local function TweenOutLastStand(mainText, img, InfoTxt)
 
-	local mainOut = TweenService:Create(
+	local mainOut = d.TweenService:Create(
 		mainText,
 		TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 		{
@@ -362,7 +347,7 @@ local function TweenOutLastStand(mainText, img, InfoTxt)
 		}
 	)
 	
-	local mainStroke = TweenService:Create(
+	local mainStroke = d.TweenService:Create(
 		mainText.UIStroke,
 		TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 		{
@@ -370,7 +355,7 @@ local function TweenOutLastStand(mainText, img, InfoTxt)
 		}
 	)
 
-	local imgMoveFade = TweenService:Create(
+	local imgMoveFade = d.TweenService:Create(
 		img,
 		TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.In),
 		{
@@ -379,7 +364,7 @@ local function TweenOutLastStand(mainText, img, InfoTxt)
 		}
 	)
 
-	local infoOut = TweenService:Create(
+	local infoOut = d.TweenService:Create(
 		InfoTxt,
 		TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 		{
@@ -388,7 +373,7 @@ local function TweenOutLastStand(mainText, img, InfoTxt)
 		}
 	)
 	
-	local infoStroke = TweenService:Create(
+	local infoStroke = d.TweenService:Create(
 		InfoTxt.UIStroke,
 		TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 		{
@@ -422,15 +407,15 @@ function GuiModule:IntroAnim(ScreenGui : ScreenGui)
 	local POSITIONS = {
 		UDim2.new(0.5, 0, 0.35, 0),  -- ModeName
 		UDim2.new(0.5, 0, 0.536, 0), -- D1
-		UDim2.new(0.5, 0, 0.636, 0), -- D2
-		UDim2.new(0.5, 0, 0.751, 0)  -- D3
+		UDim2.new(0.5, 0, 0.668, 0), -- D2
+		UDim2.new(0.5, 0, 0.83, 0)  -- D3
 	}
 	
 	local TweenOutPos = {
 		UDim2.new(0.5, 0,0.45, 0),  -- ModeName
 		UDim2.new(0.5, 0,0.58, 0), -- D1
-		UDim2.new(0.5, 0,0.658, 0), -- D2
-		UDim2.new(0.5, 0,0.788, 0)  -- D3
+		UDim2.new(0.5, 0,0.75, 0), -- D2
+		UDim2.new(0.5, 0,0.86, 0)  -- D3
 	}
 	
 	local oldPos = {	
@@ -442,12 +427,12 @@ function GuiModule:IntroAnim(ScreenGui : ScreenGui)
 	
 	local function TweenToPos()
 		
-		local TweenFrame = TweenService:Create(ModeFrame, T_INFO, {Transparency = 0.4})
+		local TweenFrame = d.TweenService:Create(ModeFrame, T_INFO, {Transparency = 0.4})
 		TweenFrame:Play()
 		TweenFrame.Completed:Wait()
 		
 		for i, obj in ipairs(UITable) do
-			local tween = TweenService:Create(obj, T_INFO, {Position = POSITIONS[i]})
+			local tween = d.TweenService:Create(obj, T_INFO, {Position = POSITIONS[i]})
 			tween:Play()
 			tween.Completed:Wait()	
 		end
@@ -456,7 +441,7 @@ function GuiModule:IntroAnim(ScreenGui : ScreenGui)
 	local function TweenOutScale1()
 		for i, obj in ipairs(UITable) do
 			if obj:FindFirstChild("UIScale") then
-				local enlarge = TweenService:Create(obj.UIScale, T_INFO, {Scale = 1.2})
+				local enlarge = d.TweenService:Create(obj.UIScale, T_INFO, {Scale = 1.2})
 				enlarge:Play()
 			end
 		end
@@ -466,19 +451,19 @@ function GuiModule:IntroAnim(ScreenGui : ScreenGui)
 	local function TweenOut()
 		for i, obj in ipairs(UITable) do
 			if obj:FindFirstChild("UIScale") then
-				local tween = TweenService:Create(obj.UIScale, T_INFO, {Scale = 0})
-				local tween1 = TweenService:Create(obj.UIStroke, T_INFO, {Transparency = 1})
+				local tween = d.TweenService:Create(obj.UIScale, T_INFO, {Scale = 0})
+				local tween1 = d.TweenService:Create(obj.UIStroke, T_INFO, {Transparency = 1})
 				tween:Play()
 				tween1:Play()
 			end
 			
-			local tween = TweenService:Create(obj, T_INFO, {Position = TweenOutPos[i], TextTransparency = 1})
+			local tween = d.TweenService:Create(obj, T_INFO, {Position = TweenOutPos[i], TextTransparency = 1})
 			tween:Play()
 		end
 	end	
 	
 	local function TweenOrig()
-		local TweenFrame = TweenService:Create(ModeFrame, T_INFO, {Transparency = 1})
+		local TweenFrame = d.TweenService:Create(ModeFrame, T_INFO, {Transparency = 1})
 		TweenFrame:Play()
 		TweenFrame.Completed:Wait()
 		for i, obj in ipairs(UITable) do
@@ -532,6 +517,8 @@ function GuiModule:SetCurrencyValues(CurrencyTable)
 	local EmoteFrame = CurrencyFrame:WaitForChild("Emote")
 	local emoteBtn = EmoteFrame:WaitForChild("btn")
 	
+	TweenUtils:TweenButton(emoteBtn)
+	
 	local CoinsFolder = CurrencyFrame:WaitForChild("Coins")
 	local WinsFolder = CurrencyFrame:WaitForChild("Wins")
 	
@@ -553,47 +540,6 @@ end
 local tweenConns = {}
 local tweenCache = {}
 
-local function tweenHover(x)
-	
-	if not tweenCache[x] then
-		tweenCache[x] = x.Size
-	end
-	
-	local normalSize = tweenCache[x]
-	local hoverSize = UDim2.new(normalSize.X.Scale * 1.1, 0, normalSize.Y.Scale * 1.1, 0)
-	local sizeTween = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	
-	return hoverSize, sizeTween, normalSize
-end
-
-
-function GuiModule:SetupTweens()
-	local ScreenGui,RoundFrame, ButtonFrame, CountButton, RoundLabel, leftFrame, finalStandButton, LastStandFrame ,CurrencyFrame, EmoteWheel = GetGui()
-	
-	for _, conn in ipairs(tweenConns) do
-		if conn then conn:Disconnect() end
-	end
-	
-	table.clear(tweenConns)
-	
-	table.insert(tweenConns, CurrencyFrame.Emote.MouseEnter:Connect(function()
-		local hoverSize, sizeTween = tweenHover(CurrencyFrame.Emote)
-		MusicModule:PlaySFX("Hover")
-		local tween = d.TweenService:Create(CurrencyFrame.Emote, sizeTween, {Size = hoverSize})
-		tween:Play()
-	end))
-	
-	table.insert(tweenConns, CurrencyFrame.Emote.MouseLeave:Connect(function()
-		local _, sizeTween, normalSize = tweenHover(CurrencyFrame.Emote)
-		local tween = d.TweenService:Create(CurrencyFrame.Emote, sizeTween, {Size = normalSize})
-		tween:Play()
-	end))
-	
-	
-end
-
-
-
 LastStandAnimation = function(LastStandFrame : Frame)
 	
 	local animConn = {}
@@ -606,30 +552,30 @@ LastStandAnimation = function(LastStandFrame : Frame)
 	local InfoTxt = LastStandFrame:WaitForChild("Info")
 	
 	
-	local mainTween = TweenService:Create(
+	local mainTween = d.TweenService:Create(
 		mainText,
 		TweenInfo.new(1.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 		{Position = UDim2.new(0.355, 0, 0.5, 0), TextTransparency = 0}
 	)
-	local mainStroke = TweenService:Create(
+	local mainStroke = d.TweenService:Create(
 		mainText.UIStroke,
 		TweenInfo.new(2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 		{Transparency = 0}
 	)
 
-	local imgTween = TweenService:Create(
+	local imgTween = d.TweenService:Create(
 		img,
 		TweenInfo.new(2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 		{Position = UDim2.new(0.855, 0, 0.475, 0), ImageTransparency = 0}
 	)
 
-	local infoTween = TweenService:Create(
+	local infoTween = d.TweenService:Create(
 		InfoTxt,
 		TweenInfo.new(1.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 		{Position = UDim2.new(0.5, 0, 0.721, 0), TextTransparency = 0}
 	)
 	
-	local infoStroke = TweenService:Create(
+	local infoStroke = d.TweenService:Create(
 		InfoTxt.UIStroke,
 		TweenInfo.new(1.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 		{Transparency = 0}

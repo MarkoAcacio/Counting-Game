@@ -338,7 +338,6 @@ function EmoteModule:SetupData()
 	local data = d.EmoteRequest:InvokeServer() 
 
 	if data and next(data) ~= nil then
-		print("Client received saved EmoteConfig!")
 
 		-- Loop through the saved slots (Emote1, Emote2, etc.)
 		for slotName, emoteInfo in pairs(data) do
