@@ -324,7 +324,6 @@ local function teleportPlayers(action, targetPlayers)
 				hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
 
 			elseif action == 2 then
-				-- Teleport back to Lobby
 				character:PivotTo(LobbySpawn.CFrame)
 			end
 
@@ -542,10 +541,22 @@ function RoundSystem:CelebrateWinners(roundStatus)
 		end
 
 		self.CelebrateWinnersActive = false
-
 		PlayerModule:ResetPlayerScale()
 		
-		teleportPlayers(2, winners) 
+		local validWinners = {}
+		for _, player in ipairs(winners) do
+			-- Check if player still exists, has a character, and the character is valid
+			if player and player.Parent and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				table.insert(validWinners, player)
+			end
+		end
+
+		-- Only teleport players who are still valid
+		if #validWinners > 0 then
+			teleportPlayers(2, validWinners)
+		else
+			warn("No valid winners to teleport back to lobby")
+		end
 
 		GameModule:ResetGame()
 		self:StartGame()

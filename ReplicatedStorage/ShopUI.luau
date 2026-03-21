@@ -8,6 +8,9 @@ local MusicModule = require(d.Modules:WaitForChild("MusicModule"))
 local GuiModule = require(d.Modules:WaitForChild("GuiModule"))
 local TweenUtils = require(d.Modules:WaitForChild("TweenUtils"))
 
+ShopUI.PlayerButtons = {}
+
+
 -- Assets
 local player = d.localPlayer
 
@@ -64,6 +67,33 @@ local _SelectedProduct = nil
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 
+
+-- NEW: Function to handle player table management
+function ShopUI:ManagePlayerTable()
+	-- Clear existing table
+	table.clear(self.PlayerButtons)
+
+	-- Add all existing players to table
+	for _, plr in ipairs(d.PlayerService:GetPlayers()) do
+		if plr ~= d.localPlayer then
+			self.PlayerButtons[plr.UserId] = plr
+		end
+	end
+
+	-- When a new player joins, add to table
+	table.insert(self.connections, d.PlayerService.PlayerAdded:Connect(function(plr)
+		if plr ~= d.localPlayer then
+			self.PlayerButtons[plr.UserId] = plr
+		end
+	end))
+
+	-- When a player leaves, remove from table
+	table.insert(self.connections, d.PlayerService.PlayerRemoving:Connect(function(plr)
+		self.PlayerButtons[plr.UserId] = nil
+	end))
+end
+
+
 local function clearConnections()
 	for _, conn in ipairs(ShopUI.connections) do
 		conn:Disconnect()
@@ -75,6 +105,7 @@ local function clearConnections()
 		ShopUI.FloatConnection:Disconnect()
 		ShopUI.FloatConnection = nil
 	end
+	
 
 	-- Clear button tables so they don't accumulate stale refs across respawns
 	table.clear(_BuyButtons)
@@ -109,6 +140,8 @@ end
 function ShopUI:Init()
 	-- Full cleanup before re-initialising (important on respawn)
 	clearConnections()
+	
+	self:ManagePlayerTable()
 
 	-- Grab fresh UI refs every time
 	local ShopIcon, shopFrame, Exit, ScrollingFrame, PlayerList, listBG, Notifications, IF, DF = getGUI()
@@ -445,46 +478,56 @@ end
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 
+function ShopUI:CreatePlayerButton(plr, TemplateButton, PlayerList, listBG)
+	local newButton = TemplateButton:Clone()
+	newButton.Name                       = plr.Name
+	newButton.PlayerName.Text            = plr.Name
+	newButton.PlayerDisplayName.Text     = plr.DisplayName
+	newButton.Visible                    = true
+	newButton.Parent                     = PlayerList
+
+	local success, thumbnailUrl = pcall(function()
+		return d.PlayerService:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+	end)
+
+	if success then
+		newButton.PlayerImage.Image = thumbnailUrl
+	end
+
+	local buttonChild = newButton:FindFirstChild("Button")
+	if buttonChild then
+		self:SetupPlayerButton(buttonChild, PlayerList, listBG, plr.UserId)
+	else
+		warn("Button child not found in cloned template for player:", plr.Name)
+	end
+end
+
 function ShopUI:LoadPlayers(PlayerList, listBG)
 	local TemplateButton = PlayerList:WaitForChild("PlayerTemplate")
 
-	-- Clear existing player buttons first (prevent duplicates on respawn)
+	-- Clear existing player buttons in UI
 	for _, child in pairs(PlayerList:GetChildren()) do
 		if child:IsA("Frame") and child.Name ~= "PlayerTemplate" then
 			child:Destroy()
 		end
 	end
 
-	for _, plr in ipairs(d.PlayerService:GetPlayers()) do
-		if plr == d.localPlayer then continue end
-
-		local newButton = TemplateButton:Clone()
-		newButton.Name                       = plr.Name
-		newButton.PlayerName.Text            = plr.Name
-		newButton.PlayerDisplayName.Text     = plr.DisplayName
-		newButton.Visible                    = true
-		newButton.Parent                     = PlayerList
-		newButton.PlayerImage.Image          = d.PlayerService:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-
-		self:SetupPlayerButton(newButton:WaitForChild("Button"), PlayerList, listBG)
+	-- Create buttons for all players in our table
+	for userId, plr in pairs(self.PlayerButtons) do
+		self:CreatePlayerButton(plr, TemplateButton, PlayerList, listBG)
 	end
 
+	-- When a new player joins, create their button
 	table.insert(self.connections, d.PlayerService.PlayerAdded:Connect(function(plr)
-		-- Don't add if already exists
-		if PlayerList:WaitForChild(plr.Name) then return end
+		if plr == d.localPlayer then return end
 
-		local newButton = TemplateButton:Clone()
-		newButton.Name                       = plr.Name
-		newButton.PlayerName.Text            = plr.Name
-		newButton.PlayerDisplayName.Text     = plr.DisplayName
-		newButton.Visible                    = true
-		newButton.Parent                     = PlayerList
-		newButton.PlayerImage.Image          = d.PlayerService:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-
-		self:SetupPlayerButton(newButton:WaitForChild("Button"), PlayerList, listBG)
+		-- Only create if doesn't already exist
+		if not PlayerList:FindFirstChild(plr.Name) then
+			self:CreatePlayerButton(plr, TemplateButton, PlayerList, listBG)
+		end
 	end))
 
-	-- Remove buttons for players who leave
+	-- When a player leaves, destroy their button
 	table.insert(self.connections, d.PlayerService.PlayerRemoving:Connect(function(plr)
 		local btn = PlayerList:FindFirstChild(plr.Name)
 		if btn then btn:Destroy() end
@@ -505,18 +548,40 @@ function ShopUI:GetPlayerToGift(PlayerList, listBG)
 	end
 end ]]
 
-function ShopUI:SetupPlayerButton(Item, PlayerList, listBG)
+function ShopUI:SetupPlayerButton(Item, PlayerList, listBG, userId)
+	if not Item then
+		warn("SetupPlayerButton called with nil Item")
+		return
+	end
+
 	local ErrorTxt = PlayerList.Parent:FindFirstChild("ErrorMessage")
 
 	table.insert(self.connections, Item.MouseButton1Click:Connect(function()
-		if d.localPlayer and Item.Name == d.localPlayer.Name then
-			ErrorTxt.Text    = "You Can't Gift Yourself!"
-			ErrorTxt.Visible = true
+		-- Check if player still exists in our tracking table
+		local targetPlayer = self.PlayerButtons[userId]
+
+		if not targetPlayer or not targetPlayer.Parent then
+			if ErrorTxt then
+				ErrorTxt.Text = "Player not found!"
+				ErrorTxt.Visible = true
+				task.wait(2)
+				ErrorTxt.Visible = false
+			end
+			return
+		end
+
+		if targetPlayer == d.localPlayer then
+			if ErrorTxt then
+				ErrorTxt.Text = "You Can't Gift Yourself!"
+				ErrorTxt.Visible = true
+			end
 			self.SelectedPlayer = nil
 			task.wait(2)
-			ErrorTxt.Visible = false
+			if ErrorTxt then
+				ErrorTxt.Visible = false
+			end
 		else
-			self.SelectedPlayer = d.PlayerService:FindFirstChild(Item.Parent.Name)
+			self.SelectedPlayer = targetPlayer
 			self:GiftPurchase(ShopUI.SelectedProduct, PlayerList, listBG)
 			toggleGiftList(false, PlayerList, listBG)
 		end
