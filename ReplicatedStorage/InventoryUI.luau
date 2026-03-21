@@ -120,8 +120,8 @@ end
 function InventoryUI:UpdateEquippedUI()
 	-- Update Death Animations
 	for deathName, deathData in pairs(self.DeathClones) do
-		local equipButton = deathData.emote:FindFirstChild("Equip")
-		local buttonLabel = equipButton:FindFirstChild("Equip")
+		local equipButton = deathData.emote:WaitForChild("Equip") 
+		local buttonLabel = equipButton:WaitForChild("Equip") 
 
 		if deathName == self.CurrentEquippedDeath then
 			buttonLabel.Text = "Equipped"
@@ -134,8 +134,8 @@ function InventoryUI:UpdateEquippedUI()
 
 	-- Update Count Animations
 	for countName, countData in pairs(self.CountClones) do
-		local equipButton = countData.emote:FindFirstChild("Equip")
-		local buttonLabel = equipButton:FindFirstChild("Equip")
+		local equipButton = countData.emote:WaitForChild("Equip") 
+		local buttonLabel = equipButton:WaitForChild("Equip") 
 
 		if countName == self.CurrentEquippedCount then
 			buttonLabel.Text = "Equipped"
@@ -154,8 +154,8 @@ function InventoryUI:UpdateEquippedUI()
 
 	-- Update Emote Animations
 	for emoteName, emoteData in pairs(self.EmoteClones) do
-		local equipButton = emoteData.emote:FindFirstChild("Equip")
-		local buttonLabel = equipButton:FindFirstChild("Equip")
+		local equipButton = emoteData.emote:WaitForChild("Equip") 
+		local buttonLabel = equipButton:WaitForChild("Equip") 
 
 		if equippedEmoteNames[emoteName] then
 			buttonLabel.Text = "Equipped"
@@ -170,9 +170,9 @@ end
 -- NEW: Set a case button to "Opening..." state
 function InventoryUI:SetCaseOpening(caseName, isOpening)
 	if self.CaseClones[caseName] then
-		local openButton = self.CaseClones[caseName].case:FindFirstChild("Open")
+		local openButton = self.CaseClones[caseName].case:WaitForChild("Open")
 		if openButton then
-			local buttonLabel = openButton:FindFirstChild("Open")
+			local buttonLabel = openButton:WaitForChild("TextLabel")
 			if buttonLabel then
 				if isOpening then
 					buttonLabel.Text = "Opening..."
@@ -191,9 +191,9 @@ end
 -- NEW: Reset all case buttons to normal state
 function InventoryUI:ResetAllCaseButtons()
 	for caseName, caseData in pairs(self.CaseClones) do
-		local openButton = caseData.case:FindFirstChild("Open")
+		local openButton = caseData.case:WaitForChild("Open")
 		if openButton then
-			local buttonLabel = openButton:FindFirstChild("Open")
+			local buttonLabel = openButton:WaitForChild("Open")
 			if buttonLabel and buttonLabel.Text == "Opening..." then
 				buttonLabel.Text = "Open"
 			end
@@ -207,8 +207,6 @@ end
 
 function InventoryUI:Init()
 	self:clearConnections()
-
-	print("INIT INIT INIT INVENTORYUI\n\n")
 
 	-- CRITICAL FIX: Wait for UI to exist in PlayerGui
 	-- When player dies, PlayerGui gets reset, so we need fresh references
@@ -237,20 +235,13 @@ function InventoryUI:Init()
 	self:CloneTemplate(InventoryFrame)
 	self:LoadButtons()
 
-	-- NEW: Request equipped items after initialization
 	self:RequestEquippedItems()
 
-	-- ✅ ENHANCED: Reset case buttons on player respawn/death
 	table.insert(self.Connections, d.localPlayer.CharacterAdded:Connect(function()
-		-- Reset all case buttons when player respawns
-		self:ResetAllCaseButtons()
-
-		-- Clear the spinning flag in GachaModule if it exists
 		if GachaModule then
 			GachaModule.Spinning = false
 		end
 
-		-- Re-enable all buttons
 		for _, buttons in pairs(self.OpenButtons) do
 			buttons.Interactable = true
 			buttons.Active = true
@@ -259,10 +250,6 @@ function InventoryUI:Init()
 
 	-- Keep existing CharacterRemoving connection
 	table.insert(self.Connections, d.localPlayer.CharacterRemoving:Connect(function()
-		-- Reset all case buttons when player dies
-		self:ResetAllCaseButtons()
-
-		-- Clear the spinning flag
 		if GachaModule then
 			GachaModule.Spinning = false
 		end
@@ -508,54 +495,61 @@ function InventoryUI:_Buttons()
 		table.insert(self._ButtonConn, buttons.MouseButton1Click:Connect(function()
 			local caseName = buttons.Parent.Name
 			
-			print("Opening")
+			local success = d.CaseOpen:InvokeServer(caseName)
+			if success then
+				
+				
+				
+				if not GachaModule.Spinning then buttons.Interactable = false end
+
+				if GachaModule.Spinning == true then
+					buttons.Interactable = false
+					warn("Gacha is already spinning!") return
+				end
+
+				-- Check if already opening a case OR if gacha is spinning
+				if self.CurrentlyOpeningCase ~= nil or GachaModule.Spinning == true then
+					buttons.Interactable = false
+					warn("WAIT FOR CURRENT CASE TO FINISH OPENING")
+					return
+				end
+
+				-- Check if this specific button says "Opening..."
+				local buttonLabel = buttons:FindFirstChild("Open")
+				if buttonLabel and buttonLabel.Text == "Opening..." then
+					buttons.Interactable = false
+					warn("THIS CASE IS ALREADY BEING OPENED")
+					return
+				end
+
+				MusicModule:PlaySFX("Click")
+
+				-- Set button to "Opening..." state
+				self:SetCaseOpening(caseName, true)
+
+				-- NEW: Monitor GachaModule.Spinning to reset button when done
+				task.spawn(function()
+					-- Wait for spinning to start (in case there's a delay)
+					local timeout = 0
+					while not GachaModule.Spinning and timeout < 50 do
+						task.wait(0.1)
+						timeout = timeout + 1
+					end
+
+					-- Now wait for it to finish
+					while GachaModule.Spinning do
+						task.wait(0.1)
+					end
+
+					-- Reset button state
+					buttons.Interactable = true
+					self:SetCaseOpening(caseName, false)
+				end)
 			
-			if GachaModule.Spinning == true then
-				buttons.Interactable = false
-				warn("Gacha is already spinning!") return
+			else
+				warn("Failed to open case - not enough cases or invalid")
+				MusicModule:PlaySFX("Error")
 			end
-
-			-- Check if already opening a case OR if gacha is spinning
-			if self.CurrentlyOpeningCase ~= nil or GachaModule.Spinning == true then
-				buttons.Interactable = false
-				warn("WAIT FOR CURRENT CASE TO FINISH OPENING")
-				return
-			end
-
-			-- Check if this specific button says "Opening..."
-			local buttonLabel = buttons:FindFirstChild("Open")
-			if buttonLabel and buttonLabel.Text == "Opening..." then
-				warn("THIS CASE IS ALREADY BEING OPENED")
-				return
-			end
-
-			buttons.Active = false
-			MusicModule:PlaySFX("Click")
-
-			-- Set button to "Opening..." state
-			self:SetCaseOpening(caseName, true)
-
-			-- Fire the server event
-			d.CaseOpen:FireServer(caseName)
-
-			-- NEW: Monitor GachaModule.Spinning to reset button when done
-			task.spawn(function()
-				-- Wait for spinning to start (in case there's a delay)
-				local timeout = 0
-				while not GachaModule.Spinning and timeout < 50 do
-					task.wait(0.1)
-					timeout = timeout + 1
-				end
-
-				-- Now wait for it to finish
-				while GachaModule.Spinning do
-					task.wait(0.1)
-				end
-
-				-- Reset button state
-				buttons.Interactable = true
-				self:SetCaseOpening(caseName, false)
-			end)
 		end))
 	end
 end
@@ -639,8 +633,8 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		local CaseClone = CaseTemplate:Clone()
 		CaseClone.Parent = ScrollingFrame
 		CaseClone.Name = _caseName
-		CaseClone.caseName.Text = displayName
-		CaseClone.qty.Text = _qty .. "x"
+		CaseClone:WaitForChild("caseName").Text = displayName
+		CaseClone:WaitForChild("qty").Text = _qty .. "x"
 		CaseClone.Visible = true
 		self.CaseClones[_caseName] = { case = CaseClone, caseQty = _qty }
 	end
@@ -655,9 +649,9 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		EmoteClone.Visible = true
 
 		-- Apply Text Color
-		EmoteClone.emoteName.Text = _emoteName
+		EmoteClone:WaitForChild("emoteName").Text = _emoteName
 		print(data)
-		EmoteClone.emoteName.TextColor3 = RARITY_COLORS[data.RarityName]
+		EmoteClone:WaitForChild("emoteName").TextColor3 = RARITY_COLORS[data.RarityName]
 
 		self:PlaySlotEmote(EmoteClone, actualID)
 		self.EmoteClones[_emoteName] = { emote = EmoteClone, emoteID = actualID }
@@ -673,8 +667,8 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		DeathClone.Visible = true
 
 		-- Apply Rarity Color
-		DeathClone.emoteName.Text = _deathName
-		DeathClone.emoteName.TextColor3 = RARITY_COLORS[data.RarityName]
+		DeathClone:WaitForChild("emoteName").Text = _deathName
+		DeathClone:WaitForChild("emoteName").TextColor3 = RARITY_COLORS[data.RarityName]
 
 		self:PlaySlotEmote(DeathClone, actualID)
 		self.DeathClones[_deathName] = { emote = DeathClone, emoteID = actualID }
@@ -690,8 +684,8 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		CountClone.Visible = true
 
 		-- Apply Rarity Color
-		CountClone.emoteName.Text = _countName
-		CountClone.emoteName.TextColor3 = RARITY_COLORS[data.RarityName]
+		CountClone:WaitForChild("emoteName").Text = _countName
+		CountClone:WaitForChild("emoteName").TextColor3 = RARITY_COLORS[data.RarityName]
 
 		self:PlaySlotEmote(CountClone, actualID)
 		self.CountClones[_countName] = { emote = CountClone, emoteID = actualID }
@@ -702,7 +696,7 @@ function InventoryUI:UpdateInventory()
 	-- 1. Update Case Quantities
 	for caseName, caseQty in pairs(self.CaseData) do
 		if self.CaseClones[caseName] then
-			self.CaseClones[caseName].case.qty.Text = caseQty .. "x"
+			self.CaseClones[caseName].case:WaitForChild("qty").Text = caseQty .. "x"
 		end
 	end
 
@@ -760,7 +754,7 @@ function InventoryUI:CreateNewSlot(name, data, template, itemType)
 	clone.Visible = true
 
 	-- SET TEXT COLOR IMMEDIATELY
-	local label = clone:FindFirstChild("emoteName")
+	local label = clone:WaitForChild("emoteName")
 	if label then
 		label.Text = name
 		label.TextColor3 = targetColor

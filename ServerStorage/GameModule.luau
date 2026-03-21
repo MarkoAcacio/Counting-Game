@@ -25,7 +25,7 @@ local updateCount
 
 
 -- Config
-local clickWindow = 0.2 -- Time frame where the button opens a state for " players clicking at the same time "
+local clickWindow = 0.3 -- Time frame where the button opens a state for " players clicking at the same time "
 -- clickwindow 0.3 normally
 GameModule.numberCount = 0
 GameModule.finalStandClicks = {}
@@ -82,9 +82,24 @@ end
 
 -- Sets TimeClick Data to time of click. 
 GameModule.CanAnimate = true
+local clickWindowActive = false
+local clickWindowStart = nil
+
 function GameModule:OnClick(player, data, roundType)
 
 	if roundType == 1 then
+
+		if not clickWindowActive then
+			clickWindowActive = true
+			clickWindowStart = os.clock()
+
+			-- Schedule window closure
+			task.delay(clickWindow, function()
+				clickWindowActive = false
+				clickWindowStart = nil
+			end)
+		end
+		
 		data.timeClick = os.clock()
 
 		-- NEW: Fire count animation to all clients
@@ -120,7 +135,7 @@ function GameModule:OnClick(player, data, roundType)
 end
 
 function GameModule:CheckRoundClicks(player, roundType)
-	local t1 = PlayerModule.Players[player].timeClick
+	local t1 = clickWindowStart or PlayerModule.Players[player].timeClick
 	if not t1 then return end
 
 	local toEliminate = {}
@@ -146,12 +161,11 @@ function GameModule:CheckRoundClicks(player, roundType)
 
 	self:HandleLastPlayer()
 
-	-- Eliminate players if needed
-	self:eliminatePlayers(toEliminate)
-
 	if #toEliminate == 1 then
 		self:updateCount(ButtonClick, player, roundType)
-	else
+	elseif #toEliminate > 1 then
+		self:eliminatePlayers(toEliminate)
+		
 		for _, player in ipairs(toEliminate) do
 			self:SetCountingUI(player, "dec")
 		end
@@ -416,6 +430,8 @@ function GameModule:ResetRound()
 	self.finalStandClicks = {}
 	GameModule:DeleteCountUI()
 	GameModule:StopAllCountAnimations() -- NEW: Stop animations
+	clickWindowStart = nil
+	clickWindowActive = false
 
 	task.wait(0.5)
 	PlayerModule:RagdollAction("delete")
@@ -438,6 +454,8 @@ function GameModule:ResetGame()
 	GameModule:DeleteCountUI()
 	self.finalStandClicks = {}
 	GameModule:StopAllCountAnimations() -- NEW: Stop animations
+	clickWindowStart = nil
+	clickWindowActive = false
 
 	task.wait(0.5)
 

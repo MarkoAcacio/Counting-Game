@@ -109,14 +109,17 @@ function InventoryHandler:SetupListeners()
 		return DeathEquipped, CountEquipped, EmoteConfig
 	end
 	
-	d.CaseOpen.OnServerEvent:Connect(function(player, case)
+	d.CaseOpen.OnServerInvoke = function(player, case)
 		local valid = DataManager.subtractCase(player, case)
 		
 		if valid then
 			local CaseModule = require(d.Modules.Interactables.CaseModule)
 			CaseModule.OpenPremiumCase(player, 2)
+			return true
+		else
+			return false
 		end
-	end)
+	end
 
 	-- Equip Death Animation
 	d.EquipDeath.OnServerEvent:Connect(function(player, itemName)

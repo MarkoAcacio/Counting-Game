@@ -130,7 +130,17 @@ function EmoteModule:Init()
 	d.DeathEvent.OnClientEvent:Connect(function(deadChar, animID)
 		if not deadChar then return end
 
-		-- If this is the LocalPlayer dying, fix the camera and stop count animation
+		-- NEW: Stop count animation for ANY character that dies
+		local charName = deadChar.Name
+		for cacheKey, track in pairs(countTrackCache) do
+			if cacheKey:find(charName) then
+				track:Stop(0)
+				track:Destroy()
+				countTrackCache[cacheKey] = nil
+			end
+		end
+
+		-- If this is the LocalPlayer dying, fix the camera and stop current count
 		if deadChar == game.Players.LocalPlayer.Character then
 			local cam = workspace.CurrentCamera
 			local head = deadChar:FindFirstChild("Head")
@@ -140,11 +150,12 @@ function EmoteModule:Init()
 				cam.CameraType = Enum.CameraType.Custom 
 			end
 
-			-- NEW: Stop count animation when dying
 			if currentCountAnim then
-				currentCountAnim:Stop()
+				currentCountAnim:Stop(0)
 				currentCountAnim = nil
 			end
+
+			d.MusicEvent:FireServer("STOP", "stop")
 		end
 
 		-- Play death animation
@@ -155,7 +166,7 @@ function EmoteModule:Init()
 			self:PlayDeathAnimation(animator, animID, deadChar)
 		end
 	end)
-
+	
 	-- NEW: Count animation listener
 	d.CountEvent.OnClientEvent:Connect(function(countChar, animID, countName)
 		if not animID then
@@ -214,17 +225,16 @@ function EmoteModule:PlayCountAnimation(animator, animationID, countChar, countN
 	end
 
 	-- If the track is already playing, don't restart it from 0 every click
-	-- This prevents the "vibrating" animation during spam
 	if not track.IsPlaying then
 		track:Play()
 	end
 
+	-- NEW: Set currentCountAnim for LOCAL player
 	if countChar == d.localPlayer.Character then
 		currentCountAnim = track
 		d.MusicEvent:FireServer(countName, "play")
 	end
 end
-
 
 
 function EmoteModule:StopAllCountAnimations(countName)

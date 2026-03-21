@@ -145,7 +145,6 @@ local function DistributeReward(winningPlayers)
 			DataManager.AddCoins(player, 200)
 			DataManager.SendCurrencies(player)
 			d.SFXEvent:FireClient(player, "Coin")
-			d.NotificationEvent:FireClient(player, 200) -- Coins only 
 		end
 		return {}
 	end
