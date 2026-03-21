@@ -178,14 +178,26 @@ end
 handleTime = function(action:string, player:Player)
 	if action == "claim" then
 		-- 1. Check if they are in the group
-		local isMember = player:IsInGroupAsync(GroupID)
+		
+		local success, groupRank = pcall(function()
+			return player:GetRankInGroupAsync(GroupID)
+		end)
+
+		if not success then
+			SFXEvent:FireClient(player, "Error")
+			d.NotificationEvent:FireClient(player, "Failed to check group status. Please try again.")
+			warn("GetRankInGroup failed for " .. player.Name)
+			return
+		end
+		
+		local isMember = (groupRank > 0)
 
 		if isMember then
 			-- 2. They are a member, now check if they are ACTUALLY allowed to claim (cooldown check)
 			local lastClaim = DataManager.getLastClaim(player)
 			local timeSinceLast = os.time() - lastClaim
 
-			if timeSinceLast >= CaseProperties.RewardCooldown then
+			if timeSinceLast >= CaseProperties.RewardCooldown and isMember then
 				-- SUCCESS: Give Rewards
 				local currentTime = os.time()
 				DataManager.setClaim(player, currentTime)

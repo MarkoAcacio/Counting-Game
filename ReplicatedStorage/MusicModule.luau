@@ -84,11 +84,11 @@ end
 
 
 function MusicModule:ToggleMute()
+
+
 	isMuted = not isMuted
 	
 	if music then
-		-- If we just muted, fade out current music to 0
-		-- If we unmuted, fade back to the standard BGM volume (0.2 in your code)
 		local targetVol = isMuted and 0 or 0.2
 		d.TweenService:Create(music, TweenInfo.new(0.5), {Volume = targetVol}):Play()
 	end
@@ -98,35 +98,32 @@ end
 
 
 function MusicModule:PlayMusic(musicType : string)
-	
-	
-	
+	-- Determine what the volume should be BASED on the current mute state
+	local targetVolume = isMuted and 0 or 0.2
+
 	if musicType == "BGM" then
 		if music then fadeOut(music, 1) end
 		music = d.MusicFolder:WaitForChild("BGM")
 		music.Looped = true
-		if music then fadeIn(music, 1, 0.2) end
+		if music then fadeIn(music, 1, targetVolume) end -- Use targetVolume here
 	elseif musicType == "FinalStand" then
 		if music then fadeOut(music, 1) end
 		music = d.MusicFolder:WaitForChild("finalstandBGM")
 		music.Looped = true
-		if music then fadeIn(music, 1, 0.2) end
+		if music then fadeIn(music, 1, targetVolume) end
 	elseif musicType == "Round" then
 		if music then fadeOut(music, 1) end
 		music = d.MusicFolder:WaitForChild("roundBGM")
 		music.Looped = true
-		print(music)
-		if music then fadeIn(music, 1, 0.2) end
+		if music then fadeIn(music, 1, targetVolume) end
 	elseif musicType == "Winner" then
 		if music then fadeOut(music, 1) end
 		music = d.MusicFolder:WaitForChild("WinMusic")
-		print(music)
 		music.Looped = false
-		if music then fadeIn(music, 1, 0.2) end
+		if music then fadeIn(music, 1, targetVolume) end
 	elseif musicType == "STOP" then
 		if music then fadeOut(music, 1) end
 	end
-	
 end
 
 function MusicModule:PlaySFX(sfxType : string)
@@ -183,6 +180,11 @@ function MusicModule:PlaySFX(sfxType : string)
 		sfx.Volume = 2
 		if sfx then sfx:Play() end
 	elseif sfxType == "Coin" then
+		
+		local traceback = debug.traceback()
+		print("COIN SFX CALLED FROM:")
+		print(traceback)
+		
 		sfx = d.SFXFolder:WaitForChild("Coin")
 		sfx.Volume = 2
 		if sfx then sfx:Play() end

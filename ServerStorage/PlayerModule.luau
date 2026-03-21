@@ -9,6 +9,7 @@ local GroupService = game:GetService("GroupService")
 local PhysicsService = game:GetService("PhysicsService")
 local SSS = game:GetService("ServerScriptService")
 local TweenService = game:GetService("TweenService")
+local BadgeService = game:GetService("BadgeService")
 
 -- Folders
 local EventsFolder = ReplicatedStorage:WaitForChild("Events")
@@ -48,17 +49,42 @@ PlayerModule.AFKPlayers = {}
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
+local function giveBadge(player)
+	task.spawn(function()
+		local badgeID = 1181315207241209
+
+		if not player:GetAttribute("BadgeChecked") then
+			player:SetAttribute("BadgeChecked", true)
+
+			local success, hasBadge = pcall(function()
+				return BadgeService:UserHasBadgeAsync(player.UserId, badgeID)
+			end)
+
+			if success and not hasBadge then
+				pcall(function()
+					BadgeService:AwardBadgeAsync(player.UserId, badgeID)
+				end)
+			end
+		end
+	end)
+end
+
+local function cleanupRagdoll(player)
+	-- Remove any ragdolls belonging to this player
+	for _, ragdoll in pairs(RagdollFolder:GetChildren()) do
+		if ragdoll:GetAttribute("OwnerUserId") == player.UserId or ragdoll.Name:match(player.Name .. "_Ragdoll") then
+			ragdoll:Destroy()
+		end
+	end
+end
+
 function PlayerModule:Init()
 
 	local d = require(ServerStorage:WaitForChild("Modules"):WaitForChild("Directory"))
 	local toggleRemote = d.ToggleAFK
 
 	toggleRemote.OnServerInvoke = function(player)
-		if self.Players[player].isPlaying == false then
-			return self:ToggleAFK(player)
-		else
-			warn("Can't AFK in-game")
-		end
+		return self:ToggleAFK(player)
 	end
 
 	PlayerService.PlayerRemoving:Connect(function(player)
@@ -70,18 +96,28 @@ function PlayerModule:Init()
 		PlayerModule:HandlePlayerJoin(player)
 
 		task.spawn(function()
-			InventoryHandler:Init(player)
+			InventoryHandler:UpdateInventory(player)
 		end)
 
 		player.CharacterAdded:Connect(function(playerCharacter)
-			-- CRITICAL: Wait for character to FULLY load before touching anything
+			-- CRITICAL: Clean up old ragdoll from previous life
+			cleanupRagdoll(player)
+
+			-- Reset death state for new life
+			playerCharacter:SetAttribute("HasDied", false)
+			playerCharacter:SetAttribute("IntentionalDeath", false)
+			playerCharacter:SetAttribute("Ragdolled", false)
+
 			local hum = playerCharacter:WaitForChild("Humanoid")
 			local hrp = playerCharacter:WaitForChild("HumanoidRootPart")
+			DataManager.checkVIP(player)
+			giveBadge(player)
 
-			-- Wait for Roblox's spawn animation to finish
 			task.wait(0.3)
 
-			-- Now safe to modify character
+			local currentAFK = self.AFKPlayers[player] or false
+			d.ToggleAFKEvent:FireClient(player, true)
+
 			local profile = DataManager.WaitForProfile(player)
 			if profile then
 				player:SetAttribute("EquippedDeath", profile.Data.DeathAnim)
@@ -98,7 +134,6 @@ function PlayerModule:Init()
 				if playerCharacter:GetAttribute("HasDied") then return end
 				playerCharacter:SetAttribute("HasDied", true)
 
-				-- Safety check - ensure character is still in workspace
 				if not playerCharacter.Parent or playerCharacter.Parent ~= workspace then
 					return
 				end
@@ -132,15 +167,27 @@ function PlayerModule:Init()
 					self.Players[player].Alive = false
 					self.Players[player].isPlaying = false
 
-					-- Only ragdoll if character is still in workspace
 					if playerCharacter and playerCharacter.Parent == workspace then
 						RagdollModule:SetupRagdoll(player, playerCharacter, hum)
 					end
 				end
+
+				-- CRITICAL: Schedule respawn after ragdoll animation
+				task.spawn(function()
+					task.wait(3.5) -- Wait for ragdoll/death animation to complete
+
+					-- Verify player still exists and needs respawn
+					if player and player.Parent and player.Character == playerCharacter then
+						-- Clean up the ragdoll
+						cleanupRagdoll(player)
+
+						-- Force respawn
+						player:LoadCharacter()
+					end
+				end)
 			end)
 
 			PlayerModule.HandlePlayerFavorite(player)
-			playerCharacter:SetAttribute("Ragdolled", false)
 
 			if not playerCharacter:FindFirstChild("_NoPlayerCollisionApplied") then
 				PlayerModule:ApplyNoPlayerCollision(playerCharacter)
@@ -153,7 +200,6 @@ function PlayerModule:Init()
 
 			table.insert(self.Characters, playerCharacter)
 			PlayerModule:HandleCharacterLoad(playerCharacter)
-
 		end)
 
 	end)
@@ -351,6 +397,10 @@ function PlayerModule:EliminatePlayers()
 	for player, data in pairs(self.Players) do
 		if not data.Alive and data.isPlaying and data.Counted then
 			data.isPlaying = false
+
+			-- Play elimination sound effect
+			SFXEvent:FireClient(player, "PlayerElimClick")
+
 			self:KillPlayer(player)
 		end
 	end
@@ -393,10 +443,14 @@ function PlayerModule:KillPlayer(player)
 	local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return end
 
+	-- Mark that we're intentionally killing them
+	player.Character:SetAttribute("IntentionalDeath", true)
+
 	humanoid:ChangeState(Enum.HumanoidStateType.Dead)
 	humanoid.Health = 0
-	humanoid:TakeDamage(humanoid.MaxHealth + 999)
 
+	-- Backup: If humanoid doesn't die properly, force respawn
+	task.wait(0.5)
 	if humanoid.Health > 0 then
 		player.Character:BreakJoints()
 	end

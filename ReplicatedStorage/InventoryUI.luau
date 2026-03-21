@@ -59,6 +59,7 @@ local RARITY_COLORS = {
 	["Common"] = Color3.fromRGB(255, 255, 255),
 	["Rare"] = Color3.fromRGB(117, 198, 255),
 	["Mythical"] = Color3.fromRGB(170, 0, 255),
+	["Legendary"] = Color3.fromRGB(255, 215, 16)
 }
 
 ------------------------------------------------------------------------------------------------------------------------------------
@@ -206,7 +207,31 @@ end
 
 function InventoryUI:Init()
 	self:clearConnections()
+
+	print("INIT INIT INIT INVENTORYUI\n\n")
+
+	-- CRITICAL FIX: Wait for UI to exist in PlayerGui
+	-- When player dies, PlayerGui gets reset, so we need fresh references
+	local player = d.localPlayer
+	local playerGui = player:WaitForChild("PlayerGui")
+	local uiScreenGui = playerGui:WaitForChild("UI"):WaitForChild("ScreenGui")
+
+	-- Make sure the UI is actually loaded before proceeding
+	if not uiScreenGui then
+		warn("ScreenGui not found, waiting...")
+		repeat task.wait(0.1) until playerGui:FindFirstChild("UI") and playerGui.UI:FindFirstChild("ScreenGui")
+		uiScreenGui = playerGui.UI.ScreenGui
+	end
+
 	local InventoryBtn, InventoryFrame, SF, DF = fetchInventoryUI()  -- SF shop frame, DF daily rewards Frame
+
+	-- CRITICAL FIX: Verify we got valid UI elements
+	if not InventoryBtn or not InventoryFrame then
+		warn("InventoryUI:Init() - UI elements not found, retrying...")
+		task.wait(0.5)
+		InventoryBtn, InventoryFrame, SF, DF = fetchInventoryUI()
+	end
+
 	self:HandleListeners(InventoryBtn, InventoryFrame, SF, DF)
 
 	self:CloneTemplate(InventoryFrame)
@@ -215,12 +240,35 @@ function InventoryUI:Init()
 	-- NEW: Request equipped items after initialization
 	self:RequestEquippedItems()
 
-	-- NEW: Listen for when gacha spinning ends to reset button states
+	-- ✅ ENHANCED: Reset case buttons on player respawn/death
+	table.insert(self.Connections, d.localPlayer.CharacterAdded:Connect(function()
+		-- Reset all case buttons when player respawns
+		self:ResetAllCaseButtons()
+
+		-- Clear the spinning flag in GachaModule if it exists
+		if GachaModule then
+			GachaModule.Spinning = false
+		end
+
+		-- Re-enable all buttons
+		for _, buttons in pairs(self.OpenButtons) do
+			buttons.Interactable = true
+			buttons.Active = true
+		end
+	end))
+
+	-- Keep existing CharacterRemoving connection
 	table.insert(self.Connections, d.localPlayer.CharacterRemoving:Connect(function()
 		-- Reset all case buttons when player dies
 		self:ResetAllCaseButtons()
+
+		-- Clear the spinning flag
+		if GachaModule then
+			GachaModule.Spinning = false
+		end
 	end))
 end
+
 
 
 function InventoryUI:parseData(data)
@@ -283,6 +331,12 @@ function InventoryUI:HandleListeners(InventoryBtn : ImageButton, InventoryFrame 
 
 		-- Toggle
 		InventoryFrame.Visible = not isAlreadyOpen
+		
+		if not isAlreadyOpen then
+			TweenUtils.BG_Blur(not isAlreadyOpen, 15)
+		else
+			TweenUtils.BG_Blur(not isAlreadyOpen, 0)
+		end
 
 		-- Shut others
 		SF.Visible = false
@@ -328,8 +382,9 @@ function InventoryUI:HandleListeners(InventoryBtn : ImageButton, InventoryFrame 
 	----- ExitButton -----
 
 	table.insert(self.Connections, InventoryFrame.Exit.MouseButton1Click:Connect(function()
-		if db == true then db = false InventoryFrame.Visible = false MusicModule:PlaySFX("Click") return end
+		if db == true then db = false InventoryFrame.Visible = false MusicModule:PlaySFX("Click") TweenUtils.BG_Blur(false, 0) return end
 		MusicModule:PlaySFX("Click")
+		TweenUtils.BG_Blur(false, 0)
 		InventoryFrame.Visible = false
 		db = true
 	end))
@@ -452,9 +507,17 @@ function InventoryUI:_Buttons()
 		self:ApplyButtonEffect(buttons)
 		table.insert(self._ButtonConn, buttons.MouseButton1Click:Connect(function()
 			local caseName = buttons.Parent.Name
+			
+			print("Opening")
+			
+			if GachaModule.Spinning == true then
+				buttons.Interactable = false
+				warn("Gacha is already spinning!") return
+			end
 
 			-- Check if already opening a case OR if gacha is spinning
 			if self.CurrentlyOpeningCase ~= nil or GachaModule.Spinning == true then
+				buttons.Interactable = false
 				warn("WAIT FOR CURRENT CASE TO FINISH OPENING")
 				return
 			end
@@ -466,6 +529,7 @@ function InventoryUI:_Buttons()
 				return
 			end
 
+			buttons.Active = false
 			MusicModule:PlaySFX("Click")
 
 			-- Set button to "Opening..." state
@@ -489,6 +553,7 @@ function InventoryUI:_Buttons()
 				end
 
 				-- Reset button state
+				buttons.Interactable = true
 				self:SetCaseOpening(caseName, false)
 			end)
 		end))
@@ -535,17 +600,38 @@ end
 
 
 function InventoryUI:CloneTemplate(InventoryFrame : Frame)
+	-- CRITICAL FIX: Verify the InventoryFrame is still valid
+	if not InventoryFrame or not InventoryFrame.Parent then
+		warn("InventoryFrame is invalid or deleted, aborting CloneTemplate")
+		return
+	end
+
 	local ScrollingFrame = InventoryFrame:WaitForChild("UI"):WaitForChild("ScrollingFrame")
 	local CaseTemplate = ScrollingFrame:WaitForChild("CaseTemplate")
 	local EmoteTemplate = ScrollingFrame:WaitForChild("EmoteTemplate")
 	local DeathTemplate = ScrollingFrame:WaitForChild("DeathTemplate")
-	local CountTemplate = ScrollingFrame:WaitForChild("CountTemplate") -- NEW: Add this to your UI
+	local CountTemplate = ScrollingFrame:WaitForChild("CountTemplate")
 
 	_emoteTemplate = EmoteTemplate
 	_deathTemplate = DeathTemplate
-	_countTemplate = CountTemplate -- NEW
+	_countTemplate = CountTemplate
 
 	repeat task.wait(0.1) until typeof(self.CaseData) == "table" and next(self.CaseData) ~= nil
+
+	-- Clear any existing clones ONLY if they're from the old UI
+	for _, child in ipairs(ScrollingFrame:GetChildren()) do
+		if child:IsA("Frame") and child.Visible == true and 
+			child ~= CaseTemplate and child ~= EmoteTemplate and 
+			child ~= DeathTemplate and child ~= CountTemplate then
+			child:Destroy()
+		end
+	end
+
+	-- Clear clone tracking tables
+	table.clear(self.CaseClones)
+	table.clear(self.EmoteClones)
+	table.clear(self.DeathClones)
+	table.clear(self.CountClones)
 
 	-- 1. CLONE CASES
 	for _caseName, _qty in pairs(self.CaseData) do
@@ -554,7 +640,7 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		CaseClone.Parent = ScrollingFrame
 		CaseClone.Name = _caseName
 		CaseClone.caseName.Text = displayName
-		CaseClone.qty.Text = "QTY: ".._qty
+		CaseClone.qty.Text = _qty .. "x"
 		CaseClone.Visible = true
 		self.CaseClones[_caseName] = { case = CaseClone, caseQty = _qty }
 	end
@@ -570,6 +656,7 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 
 		-- Apply Text Color
 		EmoteClone.emoteName.Text = _emoteName
+		print(data)
 		EmoteClone.emoteName.TextColor3 = RARITY_COLORS[data.RarityName]
 
 		self:PlaySlotEmote(EmoteClone, actualID)
@@ -577,7 +664,6 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 	end
 
 	-- 3. CLONE DEATHS
-	self.DeathClones = {} 
 	for _deathName, data in pairs(self.DeathData or {}) do
 		local actualID = (type(data) == "table" and data.ID) or data
 
@@ -594,8 +680,7 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		self.DeathClones[_deathName] = { emote = DeathClone, emoteID = actualID }
 	end
 
-	-- 4. CLONE COUNTS (NEW)
-	self.CountClones = {}
+	-- 4. CLONE COUNTS
 	for _countName, data in pairs(self.CountData or {}) do
 		local actualID = (type(data) == "table" and data.ID) or data
 
@@ -613,12 +698,11 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 	end
 end
 
-
 function InventoryUI:UpdateInventory()
 	-- 1. Update Case Quantities
 	for caseName, caseQty in pairs(self.CaseData) do
 		if self.CaseClones[caseName] then
-			self.CaseClones[caseName].case.qty.Text = "QTY: ".. caseQty
+			self.CaseClones[caseName].case.qty.Text = caseQty .. "x"
 		end
 	end
 
@@ -648,9 +732,11 @@ function InventoryUI:UpdateInventory()
 		end
 	end
 
+	-- ✅ FIX: Only reconnect buttons if NEW items were added
 	if newlyAdded then
-		self:LoadButtons() -- Re-scan and connect buttons immediately
-		self:RequestEquippedItems() -- NEW: Update equipped status for new items
+		self:clearButtonConn() -- Clear old connections first
+		self:_Buttons() -- Only reconnect the NEW buttons
+		self:RequestEquippedItems() -- Update equipped status for new items
 	end
 end
 
@@ -725,26 +811,45 @@ end
 
 
 function InventoryUI:PlaySlotEmote(emoteSlot : Frame, emoteID)
+	-- Ensure we have a clean ID string
 	local id = (type(emoteID) == "table" and emoteID.ID) or emoteID	
-	task.wait(0.3)
+	if not id or id == 0 or id == "" then return end
 
-	local vp = emoteSlot:WaitForChild("vp")
-	local rig = vp:WaitForChild("WorldModel"):WaitForChild("Rig")
-	local animator = rig:WaitForChild("Humanoid"):WaitForChild("Animator")
+	local vp = emoteSlot:FindFirstChild("vp")
+	local worldModel = vp and vp:FindFirstChild("WorldModel")
+	local rig = worldModel and worldModel:FindFirstChild("Rig")
+	local humanoid = rig and rig:FindFirstChild("Humanoid")
 
+	if not humanoid then return end
+
+	-- Ensure Animator exists
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+
+	-- Clear old animations to prevent overlapping/freezing
+	for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+		track:Stop()
+	end
 
 	local anim = Instance.new("Animation")
 	anim.AnimationId = "rbxassetid://" .. tostring(id)
-	anim.Parent = animator
 
-	local loadedAnimation = animator:LoadAnimation(anim)
-	loadedAnimation.Priority = Enum.AnimationPriority.Action
-	loadedAnimation:Play()
-	loadedAnimation.Looped = true
+	local success, track = pcall(function()
+		return animator:LoadAnimation(anim)
+	end)
 
+	if success and track then
+		track.Looped = true
+		track.Priority = Enum.AnimationPriority.Action
+		track:Play()
+
+		-- VIEWPORT FIX: Sometimes animations need a frame to initialize in VPFs
+		task.defer(function()
+			if track then track:Play() end
+		end)
+	else
+		warn("Failed to load animation ID: " .. tostring(id) .. " for " .. emoteSlot.Name)
+	end
 end
-
-
 
 local tweenCache = {}
 

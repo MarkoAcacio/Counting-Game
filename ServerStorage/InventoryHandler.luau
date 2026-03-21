@@ -8,6 +8,7 @@ InventoryHandler.connections = {}
 -- The amount of case the game has.
 local _NumberOfCases = 2
 local vipID = 3534903128
+local connectionInitialized = false
 
 --------------------------------------------------------------------------------------------------------
 
@@ -29,9 +30,14 @@ function InventoryHandler:IsVIP(player)
 	end
 end
 
-function InventoryHandler:Init(player)
+function InventoryHandler:Init()
+	if connectionInitialized then
+		warn("InventoryHandler already initialized")
+		return
+	end
+	
+	connectionInitialized = true
 	self:SetupListeners()
-	self:UpdateInventory(player)
 end
 
 -- Emote | store the emotes that the player obtained.
@@ -79,6 +85,10 @@ function InventoryHandler:SetupListeners()
 		else
 			warn(player.Name .. " tried to equip an unowned emote!")
 		end
+	end)
+	
+	d.UpdateInventory.OnServerEvent:Connect(function(player)
+		self:UpdateInventory(player)
 	end)
 
 	d.EmoteRequest.OnServerInvoke = function(player)

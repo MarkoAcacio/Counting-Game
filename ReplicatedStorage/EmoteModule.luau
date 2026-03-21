@@ -4,6 +4,7 @@ local d = require(game:GetService("ReplicatedStorage"):WaitForChild("Modules"):W
 
 local InventoryUI = require(d.Modules.InventoryUI)
 local GuiModule = require(d.Modules:WaitForChild("GuiModule"))
+local TweenUtils = require(d.Modules:WaitForChild("TweenUtils"))
 
 local getWheel
 local currentEmote = nil
@@ -156,10 +157,10 @@ function EmoteModule:Init()
 	end)
 
 	-- NEW: Count animation listener
-	d.CountEvent.OnClientEvent:Connect(function(countChar, animID)
+	d.CountEvent.OnClientEvent:Connect(function(countChar, animID, countName)
 		if not animID then
 			-- Stop all count animations
-			self:StopAllCountAnimations()
+			self:StopAllCountAnimations(countName)
 			return
 		end
 
@@ -169,7 +170,7 @@ function EmoteModule:Init()
 		local animator = hum and hum:FindFirstChild("Animator")
 
 		if animator and animID then
-			self:PlayCountAnimation(animator, animID, countChar)
+			self:PlayCountAnimation(animator, animID, countChar, countName)
 		end
 	end)
 
@@ -193,7 +194,7 @@ end
 
 
 
-function EmoteModule:PlayCountAnimation(animator, animationID, countChar)
+function EmoteModule:PlayCountAnimation(animator, animationID, countChar, countName)
 	-- If the round is cleaning up, ignore all incoming "Play" requests
 	if countLock then return end 
 
@@ -207,7 +208,7 @@ function EmoteModule:PlayCountAnimation(animator, animationID, countChar)
 
 		track = animator:LoadAnimation(anim)
 		track.Priority = Enum.AnimationPriority.Action4
-		track.Looped = false 
+		track.Looped = true
 
 		countTrackCache[cacheKey] = track
 	end
@@ -220,15 +221,17 @@ function EmoteModule:PlayCountAnimation(animator, animationID, countChar)
 
 	if countChar == d.localPlayer.Character then
 		currentCountAnim = track
+		d.MusicEvent:FireServer(countName, "play")
 	end
 end
 
 
 
-function EmoteModule:StopAllCountAnimations()
+function EmoteModule:StopAllCountAnimations(countName)
 	countLock = true -- Block new tracks immediately
 
 	print("Cleaning up tracks...")
+	d.MusicEvent:FireServer(countName, "stop")
 
 	for id, track in pairs(countTrackCache) do
 		if track then
@@ -362,8 +365,9 @@ function EmoteModule:HandleEmoteWheel()
 
 	if GuiModule.isClicked then return end
 	GuiModule.isClicked = true
+	TweenUtils.BG_Blur(true, 15) 
 
-	if GuiModule.emoteDB then GuiModule:TweenEmotes(WheelUi, "close") GuiModule.emoteDB = false task.wait(0.5) GuiModule.isClicked = false return end
+	if GuiModule.emoteDB then GuiModule:TweenEmotes(WheelUi, "close") GuiModule.emoteDB = false TweenUtils.BG_Blur(false, 0)  task.wait(0.5) GuiModule.isClicked = false return end
 
 	GuiModule:TweenEmotes(WheelUi, "open")
 	GuiModule.emoteDB = true
@@ -428,6 +432,8 @@ function EmoteModule:SetupButtons()
 			local EmoteId = self.CurrentEmotes[button.Parent.Name].animID
 			local EmoteName = self.CurrentEmotes[button.Parent.Name].animName
 			self.PlayingEmote = EmoteName
+			
+			TweenUtils.BG_Blur(false, 0) 
 
 			local Character = d.localPlayer.Character
 			local Humanoid = Character:WaitForChild("Humanoid")

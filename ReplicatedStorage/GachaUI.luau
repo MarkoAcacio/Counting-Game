@@ -56,6 +56,7 @@ local RARITY_COLORS = {
 }
 
 GachaUI.connections = {}
+local blur = d.Lighting:WaitForChild("Blur")
 
 -- NEW: Track currently active proximity prompts
 local activeProximityPrompts = {}
@@ -171,14 +172,41 @@ end
 function GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt, allPrizes)
 	local gachaFrame, ContainerFrame, ScrollingFrame, ItemTemplate, midPoint, CaseName, PrizeName = FetchGachaFrame()
 
+	local gradientName = (CaseType == "PremiumCase") and "PM_Gradient" or "NC_Gradient"
+	local existingGradient = ContainerFrame:FindFirstChild("GachaGradient")
+	CaseName.Text = CaseType == "PremiumCase" and "Premium Case" or "Normal Case"
+
+	if existingGradient then existingGradient:Destroy() end
+	
+	local newGradient = d.ReplicatedStorage:WaitForChild("Particles"):FindFirstChild(gradientName):Clone()
+	newGradient.Name = "GachaGradient"
+	newGradient.Parent = CaseName
+
 	-- Set spinning state
 	GachaUI.Spinning = true
+	local info = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local blurTween = d.TweenService:Create(blur, info, {Size = 24})
+	blur.Enabled = true
+	blurTween:Play()
+	
+	local ScreenGui = gachaFrame.Parent
+	local DR = ScreenGui:FindFirstChild("DailyRewards")
+	local EW = ScreenGui:FindFirstChild("EmoteWheel")
+	local IV = ScreenGui:FindFirstChild("Inventory")
+	local SH = ScreenGui:FindFirstChild("ShopUI")
+	
+	DR.Visible = false
+	EW.Visible = false
+	IV.Visible = false
+	SH.Visible = false
 	
 	if CaseType == "PremiumCase" then
 		prox.Normal.Enabled = false
 	elseif CaseType == "NormalCase" then
 		prox.Premium.Enabled = false
 	end
+	
+	
 
 	if GachaUI.CloneTemplate(ItemTemplate, ScrollingFrame, caseItem, allPrizes) then
 		gachaFrame.Visible = true
@@ -251,6 +279,12 @@ function GachaUI.GachaFinished(GachaFrame, GachaTween : Tween, ContainerFrame, P
 		task.wait(3)
 
 		-- Pass ProximityPrompt to ResetUI
+		local info = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		local blurTween = d.TweenService:Create(blur, info, {Size = 0})
+		blurTween:Play()
+		task.spawn(function()
+			blur.Enabled = false
+		end)
 		prox.Normal.Enabled = true
 		prox.Premium.Enabled = true
 		GachaUI.ResetUI(GachaFrame, ContainerFrame, ProximityPrompt)  
@@ -352,6 +386,11 @@ function GachaUI.ResetUI(gachaFrame : Frame, ContainerFrame : Frame, ProximityPr
 				break
 			end
 		end
+	end
+	
+	local existingGradient = ContainerFrame.CaseName:FindFirstChild("GachaGradient")
+	if existingGradient then
+		existingGradient:Destroy()
 	end
 
 	gachaFrame.Visible = false

@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 -- Modules
 local MusicModule = require(d.Modules:WaitForChild("MusicModule"))
 local GuiModule = require(d.Modules:WaitForChild("GuiModule"))
+local TweenUtils = require(d.Modules:WaitForChild("TweenUtils"))
 
 -- Assets
 local player = d.localPlayer
@@ -88,6 +89,23 @@ end
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 
+local function getRigs(CS_Shop)
+	local rwTable = {}
+	for _, obj in CS_Shop:GetChildren() do
+		if obj:IsA("Frame") then
+			local frameName = obj.Name
+			for _, child in obj:GetChildren() do
+				if child:IsA("ViewportFrame") then
+					local rig = child:FindFirstChild("WorldModel"):FindFirstChild("Rig")
+					rwTable[frameName] = rig
+				end
+			end
+		end
+	end
+	
+	return rwTable
+end
+
 function ShopUI:Init()
 	-- Full cleanup before re-initialising (important on respawn)
 	clearConnections()
@@ -97,14 +115,24 @@ function ShopUI:Init()
 
 	local bg = ScrollingFrame:WaitForChild("CaseShop")
 	if bg and bg:FindFirstChild("CaseImage") then
-		self:StartFloatingEffect(bg.CaseImage)
+		self:StartFloatingEffect(bg.CaseImage, bg.ray)
 	end
+	
+	local CS_Shop = ScrollingFrame:WaitForChild("CaseShop")
+	local rigTable = getRigs(CS_Shop)
 
 	-- Shop icon toggle
 	table.insert(self.connections, ShopIcon.MouseButton1Click:Connect(function()
 		MusicModule:PlaySFX("Click")
 		local isAlreadyOpen = shopFrame.Visible
 		shopFrame.Visible = not isAlreadyOpen
+		
+		if not isAlreadyOpen then
+			TweenUtils.BG_Blur(not isAlreadyOpen, 15)
+		else
+			TweenUtils.BG_Blur(not isAlreadyOpen, 0)
+		end
+		
 		IF.Visible = false
 		DF.Visible = false
 		GuiModule.FramesValue.SF = not isAlreadyOpen
@@ -114,10 +142,11 @@ function ShopUI:Init()
 
 	-- Exit button
 	table.insert(self.connections, Exit.MouseButton1Click:Connect(function()
-		if iconDB == true then iconDB = false shopFrame.Visible = false return end
+		if iconDB == true then iconDB = false shopFrame.Visible = false TweenUtils.BG_Blur(false, 0) return end
 		MusicModule:PlaySFX("Click")
 		iconDB = true
 		shopFrame.Visible = false
+		TweenUtils.BG_Blur(false, 0)
 	end))
 
 	-- Close gift list when shop closes
@@ -134,12 +163,12 @@ function ShopUI:Init()
 
 	-- Load content
 	self:LoadPlayers(PlayerList, listBG)
-	self:GetPlayerToGift(PlayerList, listBG)
 	local BuyButton, GiftButton = self:LoadCaseButtons(ScrollingFrame)
 	self:LoadButtons(ScrollingFrame)
 	self:LoadTipButtons(ScrollingFrame)
 	ShopUI:HandleButtonListeners(BuyButton, GiftButton, PlayerList, listBG)
 	self:TweenNotification(Notifications)
+	self:PlayEmotes(rigTable)
 
 	-- ── Respawn listener ──────────────────────────────────────────────────────
 	-- When the character is added (i.e. after death), the PlayerGui UI gets
@@ -151,6 +180,56 @@ function ShopUI:Init()
 end
 
 ----------------------------------------------------------------------------------------------------------------------------------------
+
+function ShopUI:PlayEmotes(rigTable)
+	-- Ensure we have a clean ID string
+
+	for frameName, rig in pairs(rigTable) do
+		local animator = rig:FindFirstChild("Humanoid"):FindFirstChild("Animator")
+		local animation = animator:FindFirstChild("Animation")
+		
+		for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+			track:Stop()
+		end
+		
+		
+
+		local success, track = pcall(function()
+			return animator:LoadAnimation(animation)
+		end)
+		
+		if success and track then
+			
+			if frameName == "RW1Frame" then
+				task.spawn(function()
+					while true do
+						-- Forward
+						track:Play(0.1, 1, 1)
+						track.Stopped:Wait()
+
+						-- Backward
+						track.TimePosition = track.Length
+						track:Play(0.1, 1, -1)
+						track.Stopped:Wait()
+					end
+				end)
+				continue
+			end
+			
+			track.Looped = true
+			track.Priority = Enum.AnimationPriority.Action
+			track:Play()
+
+			-- VIEWPORT FIX: Sometimes animations need a frame to initialize in VPFs
+			task.defer(function()
+				if track then track:Play() end
+			end)
+		else
+			warn("Failed to load animation")
+		end
+		
+	end
+end
 
 local tweenCache = {}
 
@@ -203,19 +282,35 @@ function ShopUI:HoverEffect(Button, Partner)
 end
 
 
-function ShopUI:StartFloatingEffect(CaseImage)
+function ShopUI:StartFloatingEffect(CaseImage, ray)
 	local originalPos = CaseImage.Position
 	local amplitude   = 0.07
-	local speed       = 2.5
+	local speed       = 1.5
+	local rotationSpeed = 25 -- Degrees per second
 
 	if self.FloatConnection then self.FloatConnection:Disconnect() end
 
-	self.FloatConnection = RunService.RenderStepped:Connect(function()
-		if not CaseImage or not CaseImage.Parent then return end
-		local time        = tick() * speed
-		local targetY     = originalPos.Y.Scale + (math.sin(time) * amplitude)
-		local targetPos   = UDim2.new(originalPos.X.Scale, originalPos.X.Offset, targetY, originalPos.Y.Offset)
+	self.FloatConnection = RunService.RenderStepped:Connect(function(dt)
+		if not CaseImage or not CaseImage.Parent or not ray then 
+			self.FloatConnection:Disconnect()
+			return 
+		end
+
+		local currentTime = tick()
+		local bobbingTime = currentTime * speed
+
+		-- 1. Calculate the new Floating Position for the Case
+		local targetY = originalPos.Y.Scale + (math.sin(bobbingTime) * amplitude)
+		local targetPos = UDim2.new(originalPos.X.Scale, originalPos.X.Offset, targetY, originalPos.Y.Offset)
+
+		-- 2. Apply Lerp for smooth movement
 		CaseImage.Position = CaseImage.Position:Lerp(targetPos, 0.1)
+
+		-- 3. Make the Ray follow the Case's current position
+		ray.Position = CaseImage.Position
+
+		-- 4. Spin the Ray independently
+		ray.Rotation = ray.Rotation + (rotationSpeed * dt)
 	end)
 end
 
@@ -318,6 +413,7 @@ function ShopUI:HandleButtonListeners(BuyButton, GiftButton, PlayerList, listBG)
 	for _, Button in pairs(GiftButton) do
 		table.insert(self.connections, Button.MouseButton1Click:Connect(function()
 			toggleGiftList(true, PlayerList, listBG)
+			MusicModule:PlaySFX("Click")
 			ShopUI.SelectedProduct = "x" .. Button.Name
 		end))
 	end
@@ -333,7 +429,9 @@ function ShopUI:HandleButtonListeners(BuyButton, GiftButton, PlayerList, listBG)
 	for _, Button in pairs(_GiftButtons) do
 		table.insert(self.connections, Button.MouseButton1Click:Connect(function()
 			toggleGiftList(true, PlayerList, listBG)
-			ShopUI.SelectedProduct = Button.Name
+			ShopUI.SelectedProduct = Button.Parent.Name
+			MusicModule:PlaySFX("Click")
+			print(ShopUI.SelectedProduct)
 		end))
 	end
 
@@ -394,6 +492,7 @@ function ShopUI:LoadPlayers(PlayerList, listBG)
 	end))
 end
 
+--[[
 function ShopUI:GetPlayerToGift(PlayerList, listBG)
 	-- This function is no longer needed since LoadPlayers already sets up all buttons
 	-- Keeping it empty for compatibility, but you can remove this function entirely
@@ -405,7 +504,7 @@ function ShopUI:GetPlayerToGift(PlayerList, listBG)
 			self:SetupPlayerButton(Item, PlayerList, listBG)
 		end
 	end
-end
+end ]]
 
 function ShopUI:SetupPlayerButton(Item, PlayerList, listBG)
 	local ErrorTxt = PlayerList.Parent:WaitForChild("ErrorMessage")
@@ -493,7 +592,6 @@ local function TweenNotif(txt, Container, data, type)
 
 	tweenC:Play()
 	tween:Play()
-	MusicModule:PlaySFX("Coin")
 
 	tween.Completed:Connect(function()
 		task.wait(0.3)

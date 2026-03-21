@@ -1,5 +1,7 @@
 local DailyRewardServer = {}
 
+local d = require(game:GetService("ServerStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
+
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -12,8 +14,9 @@ local EventsFolder = ReplicatedStorage:WaitForChild("Events")
 -- Events
 local DailyEvent = EventsFolder:WaitForChild("DailyEvent")
 local DataManager = require(SSS:WaitForChild("Data"):WaitForChild("DataManager"))
+local InventoryHandler = require(d.Modules:WaitForChild("InventoryHandler"))
 
-local _24Hours = 86400
+local _24Hours = 0--86400
 
 local FetchDailyRewardFrame
 local HandleReward
@@ -21,16 +24,35 @@ local HandleReward
 ------------------------------------------------------------------------------------------------------------------
 
 function DailyRewardServer:Init(player)
-	local cooldown = DailyRewardServer:GetTime(player)
-	DailyEvent:FireClient(player, DataManager.getDay(player), "update", cooldown, DataManager.getClaimed(player))
+	local lastClaim = DataManager.getDailyRewardTime(player)
+	local currentDay = DataManager.getDay(player)
+	local claimStatus = DataManager.getClaimed(player)
+	local cooldown = _24Hours - (os.time() - lastClaim)
+	
+	print(currentDay)
+
+	if cooldown < 0 then cooldown = 0 end
+	
+	if currentDay == 0 then
+		DataManager.setClaimed(player, false)
+	end
+
+	if cooldown <= 0 and claimStatus == true and currentDay ~= 0 then
+		local nextDay = (currentDay % 7) + 1
+		DataManager.setDay(player, nextDay)
+		DataManager.setClaimed(player, false)
+
+		currentDay = nextDay
+		claimStatus = false
+		cooldown = 0
+
+		print("Auto-advanced " .. player.Name .. " to Day " .. nextDay)
+	end
+
+	DailyEvent:FireClient(player, currentDay, "update", cooldown, claimStatus)
 end
 
-function DailyRewardServer:GetTime(player)
-	local lastClaim = DataManager.getDailyRewardTime(player)
-	local cooldown = _24Hours - (os.time() - lastClaim) or 0
-	
-	return cooldown
-end
+
 
 -- HANDLE GIVING OF REWARD IN SERVER
 DailyEvent.OnServerEvent:Connect(function(Player, Day)
@@ -43,79 +65,87 @@ end)
 
 function DailyRewardServer:isClaimable(Player, Day)
 	local lastClaim = DataManager.getDailyRewardTime(Player)
-	local nextDay = DataManager.getDay(Player) + 1
-	local cooldown = _24Hours - (os.time() - lastClaim) or 0
-	
-	
-	if tonumber(Day) == DataManager.getDay(Player) then
-		HandleReward(Player, Day, cooldown)
-	end
-	
-	if cooldown <= 0 then
-		DataManager.setDailyRewardTime(Player, os.time())
+	local currentDay = DataManager.getDay(Player)
+	local claimStatus = DataManager.getClaimed(Player)
+	local cooldown = _24Hours - (os.time() - lastClaim)
+
+	-- Check if cooldown has expired (new day available)
+	if cooldown <= 0 and claimStatus == true and currentDay > 0 then
+		-- Advance to next day
+		print("WADAHSDHADS")
+		local nextDay = (currentDay % 7) + 1
+		DataManager.setDay(Player, nextDay)
 		DataManager.setClaimed(Player, false)
-		HandleReward(Player, Day, cooldown)
-		
+		DataManager.setDailyRewardTime(Player, os.time())
+		currentDay = nextDay
+		claimStatus = false
 	end
 	
-	return true
+	if currentDay == 0 and tonumber(Day) == 1 then
+		HandleReward(Player, Day, _24Hours)
+		return
+	end
+
+	-- Only allow claiming if clicked day matches current day and not claimed
+	if tonumber(Day) == currentDay and claimStatus == false then
+		HandleReward(Player, Day, _24Hours)
+	else
+		warn("Cannot claim Day " .. Day .. ". Current day is " .. currentDay .. ", Claimed: " .. tostring(claimStatus))
+	end
 end
 
-
 ------------------------------------------------------------------------------------------------------------------
-
-HandleReward = function(Player,Day, cooldownTime)
-	
-	
+local currentCase = "PremiumCase"  -- Current Case Banner
+HandleReward = function(Player, Day, cooldownTime)
 	local claimStatus = DataManager.getClaimed(Player)
+
+	print(Day)
+
+	if claimStatus == true then 
+		warn("Already claimed today!")
+		return 
+	end
+
+	local dayNum = tonumber(Day)
+	local rewards = {30, 80, 120, 250, 350, 500, 0} -- 0 for Day 7 ( CASES )
 	
-	--print("Player : ", Player)
-	if Day == "1" and claimStatus == false then
-		DataManager.AddCoins(Player, 10)
-		DataManager.setDay(Player, 1)
+	if dayNum == 0  then
+		DataManager.setClaimed(Player, false)
+		DailyEvent:FireClient(Player, Day, "claimed", _24Hours, true)
+		return
+	end
+
+	if dayNum >= 1 and dayNum <= 7 then
+		if dayNum  < 7 then
+			DataManager.AddCoins(Player, rewards[dayNum])
+			InventoryHandler:UpdateInventory(Player)
+		end
+
+		-- Set claimed to true first
 		DataManager.setClaimed(Player, true)
-		print("Sending Event -> Local")
-		DailyEvent:FireClient(Player, Day, "claimed", cooldownTime)
-		print("DAY 1 Reward : 10C")
-	elseif Day == "2" and claimStatus == false	then
-		DataManager.AddCoins(Player, 30)
-		DataManager.setDay(Player, 2)
-		DataManager.setClaimed(Player, true)
-		print("Sending Event -> Local")
-		DailyEvent:FireClient(Player, Day, "claimed", cooldownTime)
-		print("DAY 2 Reward : 30C")
-	elseif Day == "3" and claimStatus == false then
-		DataManager.AddCoins(Player, 80)
-		DataManager.setDay(Player, 3)
-		DataManager.setClaimed(Player, true)
-		print("Sending Event -> Local")
-		DailyEvent:FireClient(Player, Day, "claimed", cooldownTime)
-		print("DAY 3 Reward : 80C")
-	elseif Day == "4" and claimStatus == false then
-		DataManager.AddCoins(Player, 120)
-		DataManager.setDay(Player, 4)
-		DataManager.setClaimed(Player, true)
-		DailyEvent:FireClient(Player, Day, "claimed", cooldownTime)
-		print("DAY 4 Reward : 120C")
-	elseif Day == "5" and claimStatus == false then
-		DataManager.AddCoins(Player, 200)
-		DataManager.setDay(Player, 5)
-		DataManager.setClaimed(Player, true)
-		DailyEvent:FireClient(Player, Day, "claimed", cooldownTime)
-		print("DAY 5 Reward : 200C")
-	elseif Day == "6" and claimStatus == false then
-		DataManager.AddCoins(Player, 300)
-		DataManager.setDay(Player, 6)
-		DataManager.setClaimed(Player, true)
-		DailyEvent:FireClient(Player, Day, "claimed", cooldownTime)
-		print("DAY 6 Reward : 300C")
-	elseif Day == "7" and claimStatus == false then
-		DailyEvent:FireClient(Player, Day, "claimed", cooldownTime)
-		
-		-- WHEN CLAIM, RESET UI!
-		DataManager.setDay(Player, 1)
-		DataManager.setClaimed(Player, true)
-		print("DAY 7 Reward : EMOTE")
+		DataManager.setDailyRewardTime(Player, os.time())
+
+		-- For Day 7, reset to Day 1, otherwise stay on current day
+		if dayNum == 7 then
+			local caseData = {
+				caseName = currentCase,
+				caseIncrement = 3
+			}
+			InventoryHandler:AddToInventory(Player, "case", caseData)
+			DataManager.setDay(Player, 0) -- Reset to Day 1
+		else
+			DataManager.setDay(Player, dayNum)
+			print("DAY " .. Day .. " Reward : " .. rewards[dayNum] .. "C")
+		end
+
+		-- Send claimed event
+		DailyEvent:FireClient(Player, Day, "claimed", _24Hours, true)
+
+		-- If Day 7, also send an update to refresh the entire UI
+		if dayNum == 7 then
+			task.wait(0.1) -- Small delay to let claimed animation finish
+			DailyEvent:FireClient(Player, 0, "update", _24Hours, true)
+		end
 	end
 end
 

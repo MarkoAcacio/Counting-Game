@@ -13,6 +13,7 @@ Directory.AvatarService = game:GetService("AvatarEditorService")
 Directory.RunService = game:GetService("RunService")
 Directory.UserInputService = game:GetService("UserInputService")
 Directory.SocialService = game:GetService("SocialService")
+Directory.Lighting = game:GetService("Lighting")
 
 -- Folders
 Directory.Modules = Directory.ReplicatedStorage:WaitForChild("Modules")
@@ -53,6 +54,9 @@ Directory.CaseOpen = Directory.Events:WaitForChild("CaseOpen")
 Directory.EquippedRequest = Directory.Events:WaitForChild("EquippedRequest")
 Directory.RoundEvent = Directory.Events:WaitForChild("RoundEvent")
 Directory.EmoteSound = Directory.Events:WaitForChild("EmoteSound")
+Directory.ToggleAFKEvent = Directory.Events:WaitForChild("ToggleAFKEvent")
+Directory.DisableClick = Directory.Events:WaitForChild("disableClick")
+Directory.UpdateInventory = Directory.Events:WaitForChild("UpdateInventory")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

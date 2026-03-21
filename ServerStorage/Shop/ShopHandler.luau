@@ -98,7 +98,7 @@ function ShopHandler:SetupReceipts()
 			self.ProcessedReceipts[purchaseID] = true
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		else
-			warn("Error Processing Receipt | @ShopHandler Module SS, ", err)
+			warn("Error Processing Receipt | @ShopHandler Module SS | Error: ", err)
 
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
@@ -128,14 +128,28 @@ function ShopHandler:RewardPlayer(PlayerID, ProductID)
 	if ProductID == ShopProperties.DevProducts.x1Case then
 		caseData.caseIncrement = 1
 		print("Bought x1")
+		d.SFXEvent:FireClient(player, "Purchase2")
 		InventoryHandler:AddToInventory(player, "case", caseData)
 		d.SFXEvent:FireClient(player, "Purchase2")
-		
 	elseif idReceived == targetID then
-		print("asdasd")
 		CaseModule.OpenPremiumCase(player, 1)
 		d.SFXEvent:FireClient(player, "Purchase2")
+	elseif idReceived == ShopProperties.DevProducts.VIP then
+		DataManager.setVIP(player)
+		d.SFXEvent:FireClient(player, "Purchase2")
+	elseif idReceived == ShopProperties.DevProducts.Featured then  -- Featured Emote
+		
+		local emoteData = {
+			EmoteName = "Menacing",
+			EmoteID = 103621363220424,
+			RarityName = "Legendary", -- You can change this to "Legendary", etc.
+			Type = "CountAnim" 
+		}
+		
+		InventoryHandler:AddToInventory(player, "count", emoteData)
+		d.SFXEvent:FireClient(player, "Purchase2")
 	elseif ProductID == ShopProperties.DevProducts.x2Case then
+		d.SFXEvent:FireClient(player, "Purchase2")
 		caseData.caseIncrement = 2
 		print("Bought x2")
 		InventoryHandler:AddToInventory(player, "case", caseData)

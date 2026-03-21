@@ -7,7 +7,7 @@ local d = require(game:GetService("ReplicatedStorage"):WaitForChild("Modules"):W
 -- Modules
 local MusicModule = require(d.Modules:WaitForChild("MusicModule"))
 local GuiModule = require(d.Modules:WaitForChild("GuiModule"))
-
+local TweenUtils = require(d.Modules:WaitForChild("TweenUtils"))
 
 -- Configs
 local ClaimColor = Color3.fromRGB(60, 229, 48)
@@ -18,8 +18,39 @@ local formatTime
 local cd = -1
 local initialized = false
 local connections = {} -- store connections for cleanup
+local activeTimer = nil -- Variable at the top of your script to track the thread
+
+local animationThreads = {}
 
 ------------------------------------------------------------------------------------------------------------------
+
+function DailyReward:InitializeAnimations(framesTable)
+	for key, thread in pairs(animationThreads) do
+		task.cancel(thread)
+	end
+	table.clear(animationThreads)
+
+	-- Find Day 7 frame and set up animations
+	for index, frame in ipairs(framesTable) do
+		if index == 7 then
+			local ray = frame:FindFirstChild("ray")
+			local caseImage = frame:FindFirstChild("CaseImage")
+
+			if ray then
+				animationThreads["raySpin"] = task.spawn(function()
+					TweenUtils:SpinUI(ray, 5)
+				end)
+			end
+
+			if caseImage then
+				animationThreads["IdleFloat"] = task.spawn(function()
+					TweenUtils:SetIdleFloat(caseImage, 2.3, 0.02)
+				end)
+			end
+		end
+	end
+
+end
 
 FetchDailyRewardFrame = function()
 
@@ -61,6 +92,7 @@ function DailyReward:DisconnectConnections()
 end
 
 function DailyReward:Init()
+	
 	if initialized then
 		initialized = false
 	end
@@ -71,8 +103,10 @@ function DailyReward:Init()
 	DailyRewardFrame, ExitButton, framesTable, leftFrame, SF, IF = FetchDailyRewardFrame()
 
 	DailyReward:HandleButtonListeners(framesTable, SF, IF)
-end
 
+	-- NEW: Initialize animations once
+	DailyReward:InitializeAnimations(framesTable)
+end
 ------------------------------------------------------------------------------------------------------------------
 
 
@@ -88,6 +122,7 @@ local function BindMainButtons()
 
 	table.insert(connections, ExitButton.MouseButton1Click:Connect(function()
 		DailyRewardFrame.Visible = false
+		TweenUtils.BG_Blur(false, 0)
 	end))
 end
 
@@ -98,18 +133,28 @@ BindMainButtons()
 d.DailyEvent.OnClientEvent:Connect(function(Day, status : string, cooldownTime : number, claimedStatus : boolean)
 
 	if status == "update" then
+		-- CANCEL the active timer before updating UI
+		if activeTimer then 
+			task.cancel(activeTimer)
+			activeTimer = nil
+			print("Cancelled active timer")
+		end
+
 		DailyReward:UpdateUI(Day, framesTable, claimedStatus)
 
-		-- FIXED: Only start timer if player has claimed current day
-		if claimedStatus and cooldownTime > 0 then
-			DailyReward:UpdateTimerUI(Day, framesTable, cooldownTime)
+		-- Start timer on NEXT day only if current day is claimed
+		local daynumber = tonumber(Day)
+		if  claimedStatus and cooldownTime > 0 then
+			local dayNumber = tonumber(Day)
+			local nextDayIndex = (dayNumber % #framesTable) + 1
+			DailyReward:UpdateTimerUI(nextDayIndex, framesTable, cooldownTime)
 		end
+
 	elseif status == "claimed" then
-		DailyReward:HandleClaimed(framesTable, Day)
+		DailyReward:HandleClaimed(framesTable, Day, cooldownTime)
 	end
 
 end)
-
 ------------------------------------------------------------------------------------------------------------------
 
 d.localPlayer.CharacterAdded:Connect(function()
@@ -146,7 +191,7 @@ function DailyReward:HandleButtonListeners(framesTable, SF, IF)
 			-- Click handler
 			table.insert(connections, button.MouseButton1Click:Connect(function()
 				if button:GetAttribute("isLocked") == false then
-					MusicModule:PlaySFX("Claim")
+					MusicModule:PlaySFX("Coin")
 					d.DailyEvent:FireServer(frames.Name)
 				else
 					warn("LOCKED")
@@ -223,6 +268,12 @@ function DailyReward:HandleButtonListeners(framesTable, SF, IF)
 		local isAlreadyOpen = DailyRewardFrame.Visible
 		DailyRewardFrame.Visible = not isAlreadyOpen
 
+		if not isAlreadyOpen then
+			TweenUtils.BG_Blur(not isAlreadyOpen, 15)
+		else
+			TweenUtils.BG_Blur(not isAlreadyOpen, 0)
+		end
+
 		SF.Visible = false
 		IF.Visible = false
 
@@ -235,28 +286,29 @@ function DailyReward:HandleButtonListeners(framesTable, SF, IF)
 	table.insert(connections, ExitButton.MouseButton1Click:Connect(function()
 		MusicModule:PlaySFX("Click")
 		DailyRewardFrame.Visible = false
+		TweenUtils.BG_Blur(false, 0)
 	end))
 end
 
 ------------------------------------------------------------------------------------------------------------------
 
-function DailyReward:HandleClaimed(FrameTable, Day)
+function DailyReward:HandleClaimed(FrameTable, Day, cooldownTime)
 	local dayNumber = tonumber(Day)
+	print(dayNumber)
 	if not dayNumber then return end
 
 	local ClaimedFrame = FrameTable[dayNumber]
 	if not ClaimedFrame then return end
 
 	local TextButton = ClaimedFrame:WaitForChild("TextButton")
-	local StatusLabel = TextButton:FindFirstChild("_Text") -- Using FindFirstChild for safety
+	local StatusLabel = TextButton:FindFirstChild("_Text")
 	local ClaimedBG = ClaimedFrame:WaitForChild("Claimed")
 
-	-- 1. INSTANT VISUAL UPDATE
+	-- 1. Update the claimed day visuals
 	if StatusLabel then
 		StatusLabel.Text = "CLAIMED"
-		StatusLabel.TextColor3 = Color3.fromRGB(27, 175, 32) -- Your green color
+		StatusLabel.TextColor3 = Color3.fromRGB(27, 175, 32)
 	else
-		-- Fallback if the label is actually the button's own text
 		TextButton.Text = "CLAIMED"
 	end
 
@@ -264,85 +316,126 @@ function DailyReward:HandleClaimed(FrameTable, Day)
 	TextButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 	ClaimedBG.Visible = true
 
-	-- 2. Determine and Start Timer for Next Day
-	local nextIndex = (dayNumber % #FrameTable) + 1
-	local DEFAULT_COOLDOWN = 86400 
-
-	self:UpdateTimerUI(dayNumber, FrameTable, DEFAULT_COOLDOWN)
+	-- 2. Start timer on the NEXT day
+	local nextDayIndex = (dayNumber % #FrameTable) + 1
+	self:UpdateTimerUI(nextDayIndex, FrameTable, cooldownTime or 86400)
 end
 ------------------------------------------------------------------------------------------------------------------
-
 function DailyReward:UpdateUI(Day, framesTable, claimedStatus)
-	-- Iterate through all 7 day frames
+	local currentDay = tonumber(Day)
+
+	-- Special case: Day 0 means completed cycle, Day 1 is claimable
+	if currentDay == 0 then
+		for index, frame in ipairs(framesTable) do
+			local TextButton = frame:WaitForChild("TextButton")
+			local _Text = TextButton:FindFirstChild("_Text") or TextButton
+			local Veil = frame:WaitForChild("Veil")
+			local ClaimedBG = frame:WaitForChild("Claimed")
+
+			if index == 1 then
+				-- Day 1 is ready to claim to restart the cycle
+				_Text.Text = "CLAIM"
+				_Text.TextColor3 = Color3.fromRGB(255, 255, 255)
+				TextButton:SetAttribute("isLocked", false)
+				TextButton.BackgroundColor3 = ClaimColor
+
+				Veil.Visible = false
+				ClaimedBG.Visible = false
+			else
+				-- All other days are locked
+				_Text.Text = "LOCKED"
+				_Text.TextColor3 = Color3.fromRGB(229, 50, 19)
+				TextButton:SetAttribute("isLocked", true)
+				TextButton.BackgroundColor3 = Color3.fromRGB(229, 50, 19)
+
+				Veil.Visible = true
+				ClaimedBG.Visible = false
+			end
+		end
+		return -- Exit early for Day 0 case
+	end
+
+	-- Normal flow for Days 1-7
 	for index, frame in ipairs(framesTable) do
 		local TextButton = frame:WaitForChild("TextButton")
-		local _Text = TextButton._Text
+		local _Text = TextButton:FindFirstChild("_Text") or TextButton
 		local Veil = frame:WaitForChild("Veil")
-		-- 1. Reference the new Claimed image/frame from your hierarchy
-		local ClaimedBG = frame:WaitForChild("Claimed") 
+		local ClaimedBG = frame:WaitForChild("Claimed")
 
-		if index < Day then
-			-- 2. Past days - already claimed
+		if index < currentDay then
+			-- Past days - already claimed
 			_Text.Text = "CLAIMED"
+			_Text.TextColor3 = Color3.fromRGB(27, 175, 32)
 			TextButton:SetAttribute("isLocked", true)
-
-			-- Grey out the button
-			_Text.TextColor3 = Color3.fromRGB(27, 175, 32) 
+			TextButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 
 			Veil.Visible = false
-			-- 3. Make the Claimed image visible
-			ClaimedBG.Visible = true 
+			ClaimedBG.Visible = true
 
-		elseif index == Day then
+		elseif index == currentDay then
 			-- Current day
 			if claimedStatus then
-				-- Player already claimed today, lock it and show claimed status
+				-- Player already claimed today
 				_Text.Text = "CLAIMED"
-				_Text:SetAttribute("isLocked", true)
-				_Text.TextColor3 = Color3.fromRGB(27, 175, 32) 
+				_Text.TextColor3 = Color3.fromRGB(27, 175, 32)
+				TextButton:SetAttribute("isLocked", true)
+				TextButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 
 				Veil.Visible = false
-				ClaimedBG.Visible = true -- Show claimed image
+				ClaimedBG.Visible = true
 			else
-				-- Player hasn't claimed today, allow claiming
+				-- Player hasn't claimed today
 				_Text.Text = "CLAIM"
+				_Text.TextColor3 = Color3.fromRGB(255, 255, 255)
 				TextButton:SetAttribute("isLocked", false)
+				TextButton.BackgroundColor3 = ClaimColor
+
 
 				Veil.Visible = false
-				ClaimedBG.Visible = false -- Hide claimed image
+				ClaimedBG.Visible = false
 			end
 
 		else
 			-- Future days (locked)
 			_Text.Text = "LOCKED"
+			_Text.TextColor3 = Color3.fromRGB(229, 50, 19)
 			TextButton:SetAttribute("isLocked", true)
-			_Text.TextColor3 = Color3.fromRGB(229, 50, 19) -- Red
+			TextButton.BackgroundColor3 = Color3.fromRGB(229, 50, 19)
 
-			Veil.Visible = true -- Keep veil (with countdown) visible
-			ClaimedBG.Visible = false -- Hide claimed image
+			if TextButton:FindFirstChild("UIStroke") then
+				TextButton.UIStroke.Color = Color3.fromRGB(229, 50, 19)
+			end
+
+			Veil.Visible = true
+			ClaimedBG.Visible = false
 		end
 	end
 end
 
-local activeTimer = nil -- Variable at the top of your script to track the thread
-
-function DailyReward:UpdateTimerUI(Day, FrameTable, cooldownTime)
-	local dayNumber = tonumber(Day)
-	local nextIndex = (dayNumber % #FrameTable) + 1
-	local nextDayFrame = FrameTable[nextIndex]
+function DailyReward:UpdateTimerUI(dayNumber, FrameTable, cooldownTime)
+	-- dayNumber is already the day we want to show the timer on
+	local nextDayFrame = FrameTable[dayNumber]
+	if not nextDayFrame then return end
 
 	local Veil = nextDayFrame:WaitForChild("Veil")
 	local cooldownText = Veil:WaitForChild("cooldownText")
 	local nextDayButton = nextDayFrame:WaitForChild("TextButton")
+	local nextDayText = nextDayButton:FindFirstChild("_Text") or nextDayButton
 
 	Veil.Visible = true
-	nextDayButton.Text = "LOCKED"
+
+	if nextDayText then
+		nextDayText.Text = "LOCKED"
+		nextDayText.TextColor3 = Color3.fromRGB(229, 50, 19)
+	end
+
 	nextDayButton:SetAttribute("isLocked", true)
 	nextDayButton.BackgroundColor3 = Color3.fromRGB(229, 50, 19)
 
-	-- Cancel any existing timer thread to prevent speed-up bugs
+	-- Cancel any existing timer
 	if activeTimer then task.cancel(activeTimer) end
 
+	-- REMOVE 'local' HERE - use the module-level variable
 	activeTimer = task.spawn(function()
 		while cooldownTime > 0 do
 			cooldownText.Text = formatTime(cooldownTime)
@@ -351,17 +444,15 @@ function DailyReward:UpdateTimerUI(Day, FrameTable, cooldownTime)
 			cd = cooldownTime
 		end
 
-		-- Cooldown Finished!
+		-- Cooldown finished - request server update
 		cd = 0
-		nextDayButton.Text = "CLAIM"
-		nextDayButton:SetAttribute("isLocked", false)
-		nextDayButton.BackgroundColor3 = ClaimColor
-		nextDayButton.UIStroke.Color = ClaimColor
-		Veil.Visible = false
+
+		print("Timer finished, requesting server update...")
+		d.InitEvent:FireServer()
+
 		activeTimer = nil
 	end)
 end
-
 ------------------------------------------------------------------------------------------------------------------
 
 formatTime = function(seconds)

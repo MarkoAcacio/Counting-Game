@@ -18,15 +18,15 @@ function ProductHandler:Init()
 	-- ACTIONS LIST : NoMoneyNormal, NoMoneyPremium, SkipChestTimer
 
 	
-	d.PromptEvent.OnClientEvent:Connect(function(fav : boolean)
+	d.PromptEvent.OnClientEvent:Connect(function(--[[fav : boolean]])
 		
-		if fav then
-			d.AvatarService:PromptSetFavorite(72311304436842, 1, true)
+	--	if fav then
+			--d.AvatarService:PromptSetFavorite(72311304436842, 1, true)
 			ProductHandler:PromptUserJoinGroup()
 			d.PromptEvent:fireServer()
-		else
-			ProductHandler:PromptUserJoinGroup()
-		end
+		--else
+			--ProductHandler:PromptUserJoinGroup()
+		--end
 	end)
 	
 	d.ProductEvent.OnClientEvent:Connect(function(type_, action : string)
@@ -60,31 +60,46 @@ end
 
 --------------------------------------------------------------------------------
 
+-- Add this at the top of ProductHandler
+local isPromptActive = false
+local lastPromptTime = 0
+local PROMPT_COOLDOWN = 10 -- 10 seconds between prompts
+
+--------------------------------------------------------------------------------
 function ProductHandler:PromptUserJoinGroup()
-	
 	d.localPlayer:WaitForChild("PlayerGui")
 	if not d.localPlayer.Character then
 		d.localPlayer.CharacterAdded:Wait()
 	end
-	
+
 	task.spawn(function()
-		while true do
-			
-			local status = d.localPlayer:IsInGroupAsync(groupID)
-			local groupRank  = d.localPlayer:GetRankInGroupAsync(groupID)
-
-			if status then
-				break
-			elseif status == false and groupRank == 0 then
-				d.GroupService:PromptJoinAsync(groupID)
-			else
-				warn("Error | PromptUserJoinGroup")
-			end
-
-			task.wait(120)
+		-- Debounce check
+		local now = tick()
+		if isPromptActive or (now - lastPromptTime) < PROMPT_COOLDOWN then
+			warn("Group prompt on cooldown or already active")
+			return
 		end
+
+		-- Check if already in group
+		local status = d.localPlayer:IsInGroupAsync(groupID)
+		if status then
+			return
+		end
+
+		isPromptActive = true
+		lastPromptTime = now
+
+		local success, err = pcall(function()
+			d.GroupService:PromptJoinAsync(groupID)
+		end)
+
+		if not success then
+			warn("Failed to show group prompt:", err)
+		end
+
+		task.wait(2) -- Wait for prompt to fully close
+		isPromptActive = false
 	end)
 end
-
 
 return ProductHandler

@@ -11,6 +11,7 @@ local ClientEvents = ReplicatedStorage:WaitForChild("Events")
 local ModulesFolder = ServerStorage:WaitForChild("Modules")
 local EventsFolder = ReplicatedStorage:WaitForChild("Events")
 local TemplatesFolder = ServerStorage:WaitForChild("Templates")
+local GlobalMusic = require(d.Modules:WaitForChild("GlobalMusic"))
 
 -- Modules
 local PlayerModule = require(d.Modules:WaitForChild("PlayerModule"))
@@ -24,7 +25,7 @@ local updateCount
 
 
 -- Config
-local clickWindow = 0.5 -- Time frame where the button opens a state for " players clicking at the same time "
+local clickWindow = 0.2 -- Time frame where the button opens a state for " players clicking at the same time "
 -- clickwindow 0.3 normally
 GameModule.numberCount = 0
 GameModule.finalStandClicks = {}
@@ -94,7 +95,7 @@ function GameModule:OnClick(player, data, roundType)
 
 			if countData and countData.ID then
 				-- Tell all clients to play this player's count animation
-				d.CountEvent:FireAllClients(player.Character, countData.ID)
+				d.CountEvent:FireAllClients(player.Character, countData.ID, equippedCountName)
 			end
 		end
 
@@ -181,9 +182,9 @@ function GameModule:HandleLastPlayer()
 			if self.LastPlayerClicked == player then
 				data.Counted = true
 				data.Alive = true
-				
+
 				self:StopAllCountAnimations()
-				
+
 				local highlight = Instance.new("Highlight")
 				highlight.FillColor = Color3.fromRGB(255, 213, 44)
 				highlight.FillTransparency = 0.7
@@ -197,9 +198,12 @@ function GameModule:HandleLastPlayer()
 				if self.LastPlayerClicked == player then
 					data.Counted = true
 					data.Alive = false
-					
+
 					self:StopAllCountAnimations()
-					
+
+					-- Play elimination sound for the last player who clicked
+					GlobalMusic:PlayElimClick(player)
+
 					local highlight = Instance.new("Highlight")
 					highlight.FillColor = Color3.fromRGB(255, 0, 0)
 					highlight.FillTransparency = 0.7
@@ -229,22 +233,27 @@ end
 -- MODIFY THIS IF YOU WANT PLAYERS TO SEE THE ELIMINATED PLAYERS DIE
 function GameModule:CheckClicks()  -- HANDLER AFTER ROUND CHECKINGS!
 	print("Checking Clicks")
-
 	print(self.LastPlayerClicked)
 
 	for playerObj, player in pairs(PlayerModule.Players) do
 
-		if player.Alive and not player.Counted and player.isPlaying then
+		if player.Alive and not player.Counted and player.isPlaying then  -- No Click
+			d.DisableClick:FireClient(playerObj)
 			print("PLAYER NO CLICK")
 			player.Alive = false
-			player.Counted = true     --------------- !!!!!!!!!!!!!!!!
-			PlayerModule:EliminatePlayers()  
+			player.Counted = true
+
+			-- Play elimination sound for players who didn't click
+			GlobalMusic:PlayElimClick(playerObj)
+
+			PlayerModule:EliminatePlayers()
 		end
 
 		if not player.Alive and player.Counted and player.isPlaying then  -- Kill Active players, but dont kill players already eliminated
+			d.DisableClick:FireClient(playerObj)
 			player.Alive = false
 			-- Dont set is playing to false, it's already handled in player system
-
+			d.DisableClick:FireClient(playerObj)
 			PlayerModule:EliminatePlayers()
 		end
 		self:DeleteCountUI()
@@ -260,6 +269,10 @@ function GameModule:eliminatePlayers(toEliminate)
 				data.Alive = false
 				data.Counted = true
 
+				-- Play elimination sound when players click at the same time
+				GlobalMusic:PlayElimClick(p)
+
+				d.DisableClick:FireClient(p)
 				local highlight = Instance.new("Highlight")
 				highlight.FillColor = Color3.fromRGB(255, 0, 0)
 				highlight.FillTransparency = 0.7
@@ -280,7 +293,8 @@ function GameModule:updateCount(ButtonClick, player: Player, roundType : number)
 
 		for _, p in ipairs(ButtonClick) do
 			local data = PlayerModule.Players[p]
-			if not data.Counted then
+			if not data.Counted and data.Alive and data.isPlaying then
+				GlobalMusic:PlayClick(player)
 				self.numberCount += 1
 				self:SetCountingUI(p, "inc", roundType)
 				data.Counted = true
@@ -288,11 +302,14 @@ function GameModule:updateCount(ButtonClick, player: Player, roundType : number)
 		end
 
 	elseif roundType == 2 and ButtonClick == nil then -- FINAL STAND
+		-- Initialize click tracking if not already done
 		if not self.finalStandClicks[player] then
 			self.finalStandClicks[player] = {
 				count = 0
 			}
 		end
+
+		GlobalMusic:PlayFinalStandClick(player)
 
 		self.finalStandClicks[player].count += 1
 		self:SetCountingUI(player, "inc", roundType)
@@ -406,6 +423,8 @@ function GameModule:ResetRound()
 	for player, data in pairs(PlayerModule.Players) do 
 		data.timeClick = nil
 		data.Counted = false
+		-- Reset Final Stand playback for each player
+		GlobalMusic:ResetFinalStandPlayback(player)
 	end
 end
 
@@ -428,6 +447,8 @@ function GameModule:ResetGame()
 		data.Alive = true
 		data.isPlaying = true
 		data.Counted = false
+		-- Reset Final Stand playback for each player
+		GlobalMusic:ResetFinalStandPlayback(player)
 	end
 end
 

@@ -11,9 +11,11 @@ local MapsFolder = workspace:WaitForChild("Maps") -- Placeholder rn
 local PlayerModule = require(d.Modules:WaitForChild("PlayerModule"))
 local GameModule = require(d.Modules:WaitForChild("GameModule"))
 local DataManager = require(d.ServerScriptService:WaitForChild("Data"):WaitForChild("DataManager"))
+local GlobalMusic = require(d.Modules:WaitForChild("GlobalMusic"))
 
 -- Variables & Functions
 local LobbySpawn = LobbyFolder:WaitForChild("SpawnLocation")
+local gameStartCount = 0
 
 local WaitForPlayers  -- Checks if 2 Players or more. If not, It will wait.
 local PlayerLeave
@@ -37,7 +39,7 @@ local mapNames = {
 
 local defaultRoundTime = 20
 
-local Intermission = 15
+local Intermission = 8 --15
 local RoundTimer = defaultRoundTime
 local WinTimer = 10
 
@@ -90,6 +92,13 @@ local function playMusic(type, music)
 	end
 end
 
+
+local function afkState(alivePlayers, bool : boolean)
+	for _, player in ipairs(alivePlayers) do
+		d.ToggleAFKEvent:FireClient(player, bool)
+	end
+end
+
 local function HandleWinnerRewards()
 	for _, player in ipairs(PlayerModule:GetAlivePlayers()) do
 		
@@ -133,19 +142,53 @@ local function DistributeReward(winningPlayers)
 	if winningPlayers then
 		for _, player in ipairs(winningPlayers) do
 			DataManager.AddWins(player, 1)
-			DataManager.AddCoins(player, 10)
-			d.NotificationEvent:FireClient(player, 5) -- Coins only 
+			DataManager.AddCoins(player, 200)
+			DataManager.SendCurrencies(player)
+			d.SFXEvent:FireClient(player, "Coin")
+			d.NotificationEvent:FireClient(player, 200) -- Coins only 
 		end
 		return {}
 	end
 end
 
+
+function RoundSystem:PromptGroupJoin()
+	gameStartCount += 1
+
+	if gameStartCount % 3 == 0 then
+		task.spawn(function()
+			for _, player in ipairs(d.PlayerService:GetPlayers()) do
+				task.spawn(function()
+					local success, isInGroup = pcall(function()
+						return player:IsInGroupAsync(228201671) -- Your group ID
+					end)
+
+					if success and not isInGroup then
+						local promptSuccess, err = pcall(function()
+							d.PromptEvent:FireClient(player)
+						end)
+
+						if not promptSuccess then
+							warn("Failed to prompt group join for " .. player.Name .. ":", err)
+						end
+					end
+				end)
+			end
+		end)
+	end
+end
+
 function RoundSystem:StartGame()
 	self.CanIntro = true
+	self:PromptGroupJoin()
 	playMusic("Music", "BGM")
 	
 	self.WinningPlayers = DistributeReward(self.WinningPlayers)
 	clearMap()
+	
+	for _, player in ipairs(d.PlayerService:GetPlayers()) do
+		d.ToggleAFKEvent:FireClient(player, true)
+	end
 	
 	local playerCount = WaitForPlayers()  -- Connect To UI
 	if playerCount then
@@ -158,6 +201,8 @@ function RoundSystem:StartGame()
 	end
 	
 end
+
+
 
 
 ---------------------------------------- Intermission --------------------------------------------
@@ -226,6 +271,8 @@ function RoundSystem:StartIntermission()
 		end
 		PlayerModule:SetPlaying()
 		self.IntermissionActive = false
+		local alivePlayers = PlayerModule:GetAlivePlayers()
+		afkState(alivePlayers, false)
 		self:StartRound()  -- START ROUND
 	end)
 end
@@ -269,7 +316,6 @@ local function teleportPlayers(action, targetPlayers)
 					end
 				end
 
-				-- 3. Fallback: If map has fewer spawns than players, pick a random one
 				if not selectedSpawn then
 					selectedSpawn = allSpawns[math.random(1, #allSpawns)]
 				end
@@ -289,6 +335,7 @@ local function teleportPlayers(action, targetPlayers)
 		end
 	end
 end
+
 
 -- @isSurvive | returns true or false. manages decrease if everyone survive. else, none.
 function RoundSystem:StartRound(isSurvive)
@@ -313,6 +360,8 @@ function RoundSystem:StartRound(isSurvive)
 
 	PlayerModule.Checked = false
 	local firedNewRound = false
+	
+	
 
 	if self.AllowTeleport == true then teleportPlayers(1) end
 	self.AllowTeleport = false
@@ -447,6 +496,25 @@ function RoundSystem:CelebrateWinners(roundStatus)
 	local winners = PlayerModule:GetAlivePlayers() -- These are the people currently winning
 	
 	PlayerModule:RagdollAction("delete")
+
+	local function giveBadge()
+		for _, player in pairs(winners) do
+			local success, hasBadge = pcall(function()
+				return d.BadgeService:UserHasBadgeAsync(player.UserId, 3948176480295906)
+			end)
+			
+			if success and not hasBadge then
+				-- 2. Award the badge
+				local awardSuccess, result = pcall(function()
+					return d.BadgeService:AwardBadgeAsync(player.UserId, 3948176480295906)
+				end)
+
+				if awardSuccess then
+					print("Badge awarded to " .. player.Name)
+				end
+			end
+		end
+	end
 	
 	if roundStatus == 1 then
 		winners = PlayerModule:GetAlivePlayers()
@@ -461,13 +529,15 @@ function RoundSystem:CelebrateWinners(roundStatus)
 	playMusic("Music", "Winner")
 	GameModule:StopAllCountAnimations()
 	
+	giveBadge()
+	
 	
 	local confetti = d.Templates:WaitForChild("Particle"):Clone()
 	confetti.Parent = workspace.Maps
 	
 	task.spawn(function()
 		while Timer > 0 and self.CelebrateWinnersActive do
-			sendEvent(5, Timer)
+			sendEvent(5, Timer, nil, winners)
 			task.wait(1)
 			Timer -= 1
 		end
@@ -615,6 +685,7 @@ function RoundSystem:determineRoundOptions()
 	local prev = self.pastAlivePlayers
 	GameModule:CheckClicks() -- Check If Player hasn't Clicked yet. & Also check if player is last to click.
 	
+	GlobalMusic.ClickPlayback = 0.9	
 	local aliveCount = #PlayerModule:GetAlivePlayers()
 	
 	if aliveCount == 1 then  -- WINNER
@@ -665,7 +736,7 @@ end
 
 
 
-sendEvent = function(action : number, Timer : number, firedNewRound : boolean)
+sendEvent = function(action : number, Timer : number, firedNewRound : boolean?, _winners)
 	if action == 1 then  -- INtermission
 		PlayerModule:SetPlayersAlive()
 		d.RoundEvent:FireAllClients({
@@ -697,7 +768,8 @@ sendEvent = function(action : number, Timer : number, firedNewRound : boolean)
 	elseif action == 5 then  -- winners
 		d.RoundEvent:FireAllClients({
 			State = 5, 
-			Time = Timer
+			Time = Timer,
+			winners = _winners
 		}, PlayerModule:ClientData())
 		
 	elseif action == 6 then  -- Final stand
