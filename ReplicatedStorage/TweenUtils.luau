@@ -112,7 +112,7 @@ function TweenUtils:ShakeButton(Button)
 	weightedTween:Play()
 end
 function TweenUtils.BG_Blur(state : boolean, size : number)
-	local blur = game:GetService("Lighting"):FindFirstChild("Blur")
+	local blur = game:GetService("Lighting"):WaitForChild("Blur")
 	
 	local info = TweenInfo.new(0.3, Enum.EasingStyle.Quad, state and Enum.EasingDirection.Out or Enum.EasingDirection.In)
 	local goal = {Size = size}

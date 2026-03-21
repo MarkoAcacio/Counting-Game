@@ -2,8 +2,6 @@ local DailyReward = {}
 
 local d = require(game:GetService("ReplicatedStorage"):WaitForChild("Modules"):WaitForChild("Directory"))
 
-
-
 -- Modules
 local MusicModule = require(d.Modules:WaitForChild("MusicModule"))
 local GuiModule = require(d.Modules:WaitForChild("GuiModule"))
@@ -64,7 +62,7 @@ FetchDailyRewardFrame = function()
 
 	local leftFrame = ScreenGui:WaitForChild("LeftFrame")
 	local DailyRewardFrame = ScreenGui:WaitForChild("DailyRewards")
-	local ExitButton = DailyRewardFrame:WaitForChild("Exit")
+	local ExitButton = DailyRewardFrame:FindFirstChild("Exit")
 
 	for _, Frames in pairs(DailyRewardFrame:WaitForChild("UI"):GetChildren()) do
 		if Frames:IsA("Frame") then
@@ -302,7 +300,7 @@ function DailyReward:HandleClaimed(FrameTable, Day, cooldownTime)
 
 	local TextButton = ClaimedFrame:WaitForChild("TextButton")
 	local StatusLabel = TextButton:FindFirstChild("_Text")
-	local ClaimedBG = ClaimedFrame:WaitForChild("Claimed")
+	local ClaimedBG = ClaimedFrame:FindFirstChild("Claimed")
 
 	-- 1. Update the claimed day visuals
 	if StatusLabel then
@@ -418,7 +416,7 @@ function DailyReward:UpdateTimerUI(dayNumber, FrameTable, cooldownTime)
 	if not nextDayFrame then return end
 
 	local Veil = nextDayFrame:WaitForChild("Veil")
-	local cooldownText = Veil:WaitForChild("cooldownText")
+	local cooldownText = Veil:FindFirstChild("cooldownText")
 	local nextDayButton = nextDayFrame:WaitForChild("TextButton")
 	local nextDayText = nextDayButton:FindFirstChild("_Text") or nextDayButton
 

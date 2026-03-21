@@ -16,7 +16,7 @@ local DailyEvent = EventsFolder:WaitForChild("DailyEvent")
 local DataManager = require(SSS:WaitForChild("Data"):WaitForChild("DataManager"))
 local InventoryHandler = require(d.Modules:WaitForChild("InventoryHandler"))
 
-local _24Hours = 0--86400
+local _24Hours = 86400
 
 local FetchDailyRewardFrame
 local HandleReward

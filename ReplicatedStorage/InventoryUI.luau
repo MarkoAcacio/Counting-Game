@@ -121,7 +121,7 @@ function InventoryUI:UpdateEquippedUI()
 	-- Update Death Animations
 	for deathName, deathData in pairs(self.DeathClones) do
 		local equipButton = deathData.emote:WaitForChild("Equip") 
-		local buttonLabel = equipButton:WaitForChild("Equip") 
+		local buttonLabel = equipButton:FindFirstChild("Equip") 
 
 		if deathName == self.CurrentEquippedDeath then
 			buttonLabel.Text = "Equipped"
@@ -135,7 +135,7 @@ function InventoryUI:UpdateEquippedUI()
 	-- Update Count Animations
 	for countName, countData in pairs(self.CountClones) do
 		local equipButton = countData.emote:WaitForChild("Equip") 
-		local buttonLabel = equipButton:WaitForChild("Equip") 
+		local buttonLabel = equipButton:FindFirstChild("Equip") 
 
 		if countName == self.CurrentEquippedCount then
 			buttonLabel.Text = "Equipped"
@@ -155,7 +155,7 @@ function InventoryUI:UpdateEquippedUI()
 	-- Update Emote Animations
 	for emoteName, emoteData in pairs(self.EmoteClones) do
 		local equipButton = emoteData.emote:WaitForChild("Equip") 
-		local buttonLabel = equipButton:WaitForChild("Equip") 
+		local buttonLabel = equipButton:FindFirstChild("Equip") 
 
 		if equippedEmoteNames[emoteName] then
 			buttonLabel.Text = "Equipped"
@@ -172,7 +172,7 @@ function InventoryUI:SetCaseOpening(caseName, isOpening)
 	if self.CaseClones[caseName] then
 		local openButton = self.CaseClones[caseName].case:WaitForChild("Open")
 		if openButton then
-			local buttonLabel = openButton:WaitForChild("TextLabel")
+			local buttonLabel = openButton:FindFirstChild("TextLabel")
 			if buttonLabel then
 				if isOpening then
 					buttonLabel.Text = "Opening..."
@@ -193,7 +193,7 @@ function InventoryUI:ResetAllCaseButtons()
 	for caseName, caseData in pairs(self.CaseClones) do
 		local openButton = caseData.case:WaitForChild("Open")
 		if openButton then
-			local buttonLabel = openButton:WaitForChild("Open")
+			local buttonLabel = openButton:WaitForChild("TextLabel")
 			if buttonLabel and buttonLabel.Text == "Opening..." then
 				buttonLabel.Text = "Open"
 			end
@@ -217,7 +217,7 @@ function InventoryUI:Init()
 	-- Make sure the UI is actually loaded before proceeding
 	if not uiScreenGui then
 		warn("ScreenGui not found, waiting...")
-		repeat task.wait(0.1) until playerGui:FindFirstChild("UI") and playerGui.UI:FindFirstChild("ScreenGui")
+		repeat task.wait(0.1) until playerGui:WaitForChild("UI") and playerGui.UI:WaitForChild("ScreenGui")
 		uiScreenGui = playerGui.UI.ScreenGui
 	end
 
@@ -278,7 +278,7 @@ function InventoryUI:HandleListeners(InventoryBtn : ImageButton, InventoryFrame 
 	local CaseCategory = InventoryFrame.CategoryFrame.opt2
 	local EmoteCategory = InventoryFrame.CategoryFrame.opt1
 	local AllCategory = InventoryFrame.CategoryFrame.opt3
-	local ExitBtn = InventoryFrame:WaitForChild("Exit")
+	local ExitBtn = InventoryFrame:FindFirstChild("Exit")
 
 	TweenUtils:TweenButton(InventoryBtn)
 	TweenUtils:TweenButton(ExitBtn)
@@ -495,7 +495,7 @@ function InventoryUI:_Buttons()
 		table.insert(self._ButtonConn, buttons.MouseButton1Click:Connect(function()
 			local caseName = buttons.Parent.Name
 			
-			local success = d.CaseOpen:InvokeServer(caseName)
+			local success = d._CaseOpen:InvokeServer(caseName)
 			if success then
 				
 				
@@ -515,7 +515,7 @@ function InventoryUI:_Buttons()
 				end
 
 				-- Check if this specific button says "Opening..."
-				local buttonLabel = buttons:FindFirstChild("Open")
+				local buttonLabel = buttons:FindFirstChild("TextLabel")
 				if buttonLabel and buttonLabel.Text == "Opening..." then
 					buttons.Interactable = false
 					warn("THIS CASE IS ALREADY BEING OPENED")
@@ -600,7 +600,7 @@ function InventoryUI:CloneTemplate(InventoryFrame : Frame)
 		return
 	end
 
-	local ScrollingFrame = InventoryFrame:WaitForChild("UI"):WaitForChild("ScrollingFrame")
+	local ScrollingFrame = InventoryFrame:WaitForChild("UI"):FindFirstChild("ScrollingFrame")
 	local CaseTemplate = ScrollingFrame:WaitForChild("CaseTemplate")
 	local EmoteTemplate = ScrollingFrame:WaitForChild("EmoteTemplate")
 	local DeathTemplate = ScrollingFrame:WaitForChild("DeathTemplate")
@@ -809,7 +809,7 @@ function InventoryUI:PlaySlotEmote(emoteSlot : Frame, emoteID)
 	local id = (type(emoteID) == "table" and emoteID.ID) or emoteID	
 	if not id or id == 0 or id == "" then return end
 
-	local vp = emoteSlot:FindFirstChild("vp")
+	local vp = emoteSlot:WaitForChild("vp")
 	local worldModel = vp and vp:FindFirstChild("WorldModel")
 	local rig = worldModel and worldModel:FindFirstChild("Rig")
 	local humanoid = rig and rig:FindFirstChild("Humanoid")
@@ -817,7 +817,7 @@ function InventoryUI:PlaySlotEmote(emoteSlot : Frame, emoteID)
 	if not humanoid then return end
 
 	-- Ensure Animator exists
-	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+	local animator = humanoid:FindFirstChild("Animator") or Instance.new("Animator", humanoid)
 
 	-- Clear old animations to prevent overlapping/freezing
 	for _, track in pairs(animator:GetPlayingAnimationTracks()) do
@@ -867,7 +867,7 @@ end
 function InventoryUI:ApplyCategoryEffect(button)
 	-- The button is opt1, opt2, or opt3 (ImageButton)
 	-- We check for a TextLabel inside it (Emotes, Cases, or All)
-	local label = button:FindFirstChildWhichIsA("TextLabel")
+	local label = button:FindFirstChild("TextLabel")
 
 	-- 1. Cache original sizes
 	if not tweenCache[button] then tweenCache[button] = button.Size end

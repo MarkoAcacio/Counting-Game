@@ -96,7 +96,7 @@ local function getRigs(CS_Shop)
 			local frameName = obj.Name
 			for _, child in obj:GetChildren() do
 				if child:IsA("ViewportFrame") then
-					local rig = child:FindFirstChild("WorldModel"):FindFirstChild("Rig")
+					local rig = child:WaitForChild("WorldModel"):FindFirstChild("Rig")
 					rwTable[frameName] = rig
 				end
 			end
@@ -113,12 +113,11 @@ function ShopUI:Init()
 	-- Grab fresh UI refs every time
 	local ShopIcon, shopFrame, Exit, ScrollingFrame, PlayerList, listBG, Notifications, IF, DF = getGUI()
 
-	local bg = ScrollingFrame:WaitForChild("CaseShop")
-	if bg and bg:FindFirstChild("CaseImage") then
-		self:StartFloatingEffect(bg.CaseImage, bg.ray)
+	local CS_Shop = ScrollingFrame:WaitForChild("CaseShop")
+	if CS_Shop and CS_Shop:FindFirstChild("CaseImage") then
+		self:StartFloatingEffect(CS_Shop.CaseImage, CS_Shop.ray)
 	end
 	
-	local CS_Shop = ScrollingFrame:WaitForChild("CaseShop")
 	local rigTable = getRigs(CS_Shop)
 
 	-- Shop icon toggle
@@ -185,7 +184,7 @@ function ShopUI:PlayEmotes(rigTable)
 	-- Ensure we have a clean ID string
 
 	for frameName, rig in pairs(rigTable) do
-		local animator = rig:FindFirstChild("Humanoid"):FindFirstChild("Animator")
+		local animator = rig:WaitForChild("Humanoid"):FindFirstChild("Animator")
 		local animation = animator:FindFirstChild("Animation")
 		
 		for _, track in pairs(animator:GetPlayingAnimationTracks()) do
@@ -316,7 +315,7 @@ end
 
 function ShopUI:ApplyHoverToShopButtons(ScrollingFrame)
 	local CaseShop   = ScrollingFrame:WaitForChild("CaseShop")
-	local BTN        = CaseShop.Buttons
+	local BTN        = CaseShop:WaitForChild("Buttons")
 
 	self:HoverEffect(BTN:WaitForChild("x1Case"), BTN:WaitForChild("bg1"))
 	self:HoverEffect(BTN:WaitForChild("x2Case"), BTN:WaitForChild("bg2"))
@@ -325,7 +324,7 @@ function ShopUI:ApplyHoverToShopButtons(ScrollingFrame)
 	self:HoverEffect(BTN:WaitForChild("2Case"))
 	self:HoverEffect(BTN:WaitForChild("3Case"))
 
-	local Tips = ScrollingFrame:FindFirstChild("Tips")
+	local Tips = ScrollingFrame:WaitForChild("Tips")
 	if Tips then
 		local ButtonHolder = Tips:FindFirstChild("ButtonHolder")
 		if ButtonHolder then
@@ -336,7 +335,7 @@ function ShopUI:ApplyHoverToShopButtons(ScrollingFrame)
 		end
 	end
 
-	local VIP = ScrollingFrame:FindFirstChild("VIP")
+	local VIP = ScrollingFrame:WaitForChild("VIP")
 	if VIP then
 		local buyBtn  = VIP:FindFirstChild("Buy")
 		local giftBtn = VIP:FindFirstChild("Gift")
@@ -345,7 +344,7 @@ function ShopUI:ApplyHoverToShopButtons(ScrollingFrame)
 	end
 
 	for _, coinFrame in pairs({"coin1", "coin2", "coin3"}) do
-		local frame = ScrollingFrame:FindFirstChild(coinFrame)
+		local frame = ScrollingFrame:WaitForChild(coinFrame)
 		if frame then
 			local buyBtn  = frame:FindFirstChild("Buy")
 			local giftBtn = frame:FindFirstChild("Gift")
@@ -381,7 +380,7 @@ function ShopUI:LoadButtons(ScrollingFrame)
 end
 
 function ShopUI:LoadTipButtons(ScrollingFrame)
-	local TipsFrame = ScrollingFrame:FindFirstChild("Tips")
+	local TipsFrame = ScrollingFrame:WaitForChild("Tips")
 	if not TipsFrame then warn("Tips frame not found") return end
 
 	local ButtonHolder = TipsFrame:FindFirstChild("ButtonHolder")
@@ -467,12 +466,12 @@ function ShopUI:LoadPlayers(PlayerList, listBG)
 		newButton.Parent                     = PlayerList
 		newButton.PlayerImage.Image          = d.PlayerService:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
 
-		self:SetupPlayerButton(newButton.Button, PlayerList, listBG)
+		self:SetupPlayerButton(newButton:WaitForChild("Button"), PlayerList, listBG)
 	end
 
 	table.insert(self.connections, d.PlayerService.PlayerAdded:Connect(function(plr)
 		-- Don't add if already exists
-		if PlayerList:FindFirstChild(plr.Name) then return end
+		if PlayerList:WaitForChild(plr.Name) then return end
 
 		local newButton = TemplateButton:Clone()
 		newButton.Name                       = plr.Name
@@ -482,7 +481,7 @@ function ShopUI:LoadPlayers(PlayerList, listBG)
 		newButton.Parent                     = PlayerList
 		newButton.PlayerImage.Image          = d.PlayerService:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
 
-		self:SetupPlayerButton(newButton.Button, PlayerList, listBG)
+		self:SetupPlayerButton(newButton:WaitForChild("Button"), PlayerList, listBG)
 	end))
 
 	-- Remove buttons for players who leave
@@ -507,7 +506,7 @@ function ShopUI:GetPlayerToGift(PlayerList, listBG)
 end ]]
 
 function ShopUI:SetupPlayerButton(Item, PlayerList, listBG)
-	local ErrorTxt = PlayerList.Parent:WaitForChild("ErrorMessage")
+	local ErrorTxt = PlayerList.Parent:FindFirstChild("ErrorMessage")
 
 	table.insert(self.connections, Item.MouseButton1Click:Connect(function()
 		if d.localPlayer and Item.Name == d.localPlayer.Name then
@@ -605,7 +604,7 @@ end
 function ShopUI:TweenNotification(Notifications)
 	table.insert(self.connections, d.NotificationEvent.OnClientEvent:Connect(function(data)
 		local Container = Notifications:WaitForChild("Container")
-		local txt       = Container:WaitForChild("txt")
+		local txt       = Container:FindFirstChild("txt")
 		Notifications.Visible = true
 
 		if typeof(data) ~= "number" then

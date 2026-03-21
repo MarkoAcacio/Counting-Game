@@ -135,37 +135,31 @@ end
 
 
 function GachaUI:Init()
-
-	self:DisconnectConnections()
+	-- Only disconnect if we're truly re-initializing
+	if #self.connections > 0 then
+		self:DisconnectConnections()
+	end
 
 	GachaUI.PreloadImages()
 
-	-- Store the current ProximityPrompt so we can re-enable it if needed
-	local currentProximityPrompt = nil
-
 	-- @PARAMS | caseItem ( Determined Reward ), CaseType ( Normal, Premium )
 	table.insert(self.connections, d.GachaEvent.OnClientEvent:Connect(function(caseItem, CaseType, ProximityPrompt, allPrizes)
+		-- Don't process if we're already spinning
+		if self.Spinning then return end
+
 		ProximityPrompt.Enabled = false
-		currentProximityPrompt = ProximityPrompt
 		table.insert(activeProximityPrompts, ProximityPrompt)
 
-		-- Pass allPrizes into the next function
 		GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt, allPrizes)
 	end))
 
-	-- NEW: Detect when player dies/resets and clean up everything
+	-- Detect when player dies/resets and clean up everything
 	table.insert(self.connections, d.localPlayer.CharacterRemoving:Connect(function()
-		-- Clean up all active state
 		self:CleanupState()
 	end))
 
-	-- Reconnect event listeners when character respawns
-	table.insert(self.connections, d.localPlayer.CharacterAdded:Connect(function()
-		-- Small delay to ensure everything is loaded
-		task.wait(0.1)
-		-- Reinitialize to set up listeners again
-		self:Init()
-	end))
+	-- DON'T reconnect on CharacterAdded - the connection is still valid
+	-- The Init() should only be called ONCE when the module first loads
 end
 -----------------------------------------------------------------------------------------------
 
@@ -177,7 +171,7 @@ function GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt, allPrizes)
 	CaseName.Text = CaseType == "PremiumCase" and "Premium Case" or "Normal Case"
 
 	if existingGradient then existingGradient:Destroy() end
-	
+
 	local newGradient = d.ReplicatedStorage:WaitForChild("Particles"):FindFirstChild(gradientName):Clone()
 	newGradient.Name = "GachaGradient"
 	newGradient.Parent = CaseName
@@ -188,25 +182,25 @@ function GachaUI.OpenGachaUI(caseItem, CaseType, ProximityPrompt, allPrizes)
 	local blurTween = d.TweenService:Create(blur, info, {Size = 24})
 	blur.Enabled = true
 	blurTween:Play()
-	
+
 	local ScreenGui = gachaFrame.Parent
 	local DR = ScreenGui:FindFirstChild("DailyRewards")
 	local EW = ScreenGui:FindFirstChild("EmoteWheel")
 	local IV = ScreenGui:FindFirstChild("Inventory")
 	local SH = ScreenGui:FindFirstChild("ShopUI")
-	
+
 	DR.Visible = false
 	EW.Visible = false
 	IV.Visible = false
 	SH.Visible = false
-	
+
 	if CaseType == "PremiumCase" then
 		prox.Normal.Enabled = false
 	elseif CaseType == "NormalCase" then
 		prox.Premium.Enabled = false
 	end
-	
-	
+
+
 
 	if GachaUI.CloneTemplate(ItemTemplate, ScrollingFrame, caseItem, allPrizes) then
 		gachaFrame.Visible = true
@@ -239,7 +233,6 @@ function GachaUI.SpinGacha(caseItem, CaseType, ProximityPrompt)
 
 	local GachaTween = d.TweenService:Create(ScrollingFrame, ScrollAnimation, {CanvasPosition = Vector2.new(RewardFramePos, 0)})
 	GachaTween:Play()
-
 	-- ADD caseItem HERE
 	return GachaUI.GachaFinished(gachaFrame, GachaTween, ContainerFrame, ProximityPrompt, caseItem)
 end
@@ -258,7 +251,6 @@ function GachaUI.GachaFinished(GachaFrame, GachaTween : Tween, ContainerFrame, P
 			PrizeName.Visible = true
 		end
 
-		-- NEW: Update Prize Frame
 		if PrizeFrame then
 			PrizeFrame.Visible = true
 
@@ -387,7 +379,7 @@ function GachaUI.ResetUI(gachaFrame : Frame, ContainerFrame : Frame, ProximityPr
 			end
 		end
 	end
-	
+
 	local existingGradient = ContainerFrame.CaseName:FindFirstChild("GachaGradient")
 	if existingGradient then
 		existingGradient:Destroy()

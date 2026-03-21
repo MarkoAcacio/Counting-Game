@@ -77,8 +77,8 @@ local function cameraFollow(start)
 	local char = d.localPlayer.Character
 	if not char then return end
 
-	local torso = char:FindFirstChild("Head")
-	local humanoid = char:FindFirstChild("Humanoid")
+	local torso = char:WaitForChild("Head")
+	local humanoid = char:WaitForChild("Humanoid")
 
 	if not start then
 		if cameraConn then cameraConn:Disconnect() cameraConn = nil end
@@ -143,7 +143,7 @@ function EmoteModule:Init()
 		-- If this is the LocalPlayer dying, fix the camera and stop current count
 		if deadChar == game.Players.LocalPlayer.Character then
 			local cam = workspace.CurrentCamera
-			local head = deadChar:FindFirstChild("Head")
+			local head = deadChar:WaitForChild("Head")
 
 			if head then
 				cam.CameraSubject = head
@@ -159,8 +159,8 @@ function EmoteModule:Init()
 		end
 
 		-- Play death animation
-		local hum = deadChar:FindFirstChild("Humanoid")
-		local animator = hum and hum:FindFirstChild("Animator")
+		local hum = deadChar:WaitForChild("Humanoid")
+		local animator = hum and hum:WaitForChild("Animator")
 
 		if animator and animID then
 			self:PlayDeathAnimation(animator, animID, deadChar)
@@ -177,8 +177,8 @@ function EmoteModule:Init()
 
 		if not countChar then return end
 
-		local hum = countChar:FindFirstChild("Humanoid")
-		local animator = hum and hum:FindFirstChild("Animator")
+		local hum = countChar:WaitForChild("Humanoid")
+		local animator = hum and hum:WaitForChild("Animator")
 
 		if animator and animID then
 			self:PlayCountAnimation(animator, animID, countChar, countName)
@@ -187,7 +187,7 @@ function EmoteModule:Init()
 
 	d.RunService.RenderStepped:Connect(function()
 		if currentEmote and d.localPlayer.Character then
-			local hum = d.localPlayer.Character:FindFirstChild("Humanoid")
+			local hum = d.localPlayer.Character:WaitForChild("Humanoid")
 			if hum and hum.MoveDirection.Magnitude > 0 then
 				currentEmote:Stop()
 				currentEmote = nil
@@ -414,9 +414,9 @@ function EmoteModule:SetupViewports()
 
 		for _, WorldModel in ipairs(vp:GetChildren()) do
 			if WorldModel:IsA("WorldModel") then
-				local rig = WorldModel:FindFirstChild("Rig")
+				local rig = WorldModel:WaitForChild("Rig")
 				if rig then
-					local animator = rig:FindFirstChild("Humanoid"):FindFirstChild("Animator")
+					local animator = rig:WaitForChild("Humanoid"):WaitForChild("Animator")
 
 					task.wait(0.5)
 

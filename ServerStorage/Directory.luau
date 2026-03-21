@@ -52,12 +52,13 @@ Directory.EquipDeath = Directory.Events:WaitForChild("EquipDeath")
 Directory.DeathEvent = Directory.Events:WaitForChild("DeathEvent")
 Directory.EquipCount = Directory.Events:WaitForChild("EquipCount")
 Directory.CountEvent = Directory.Events:WaitForChild("CountEvent")
-Directory.CaseOpen = Directory.Events:WaitForChild("CaseOpen")
+Directory._CaseOpen = Directory.Events:WaitForChild("_CaseOpen")
 Directory.EquippedRequest = Directory.Events:WaitForChild("EquippedRequest")
 Directory.EmoteSound = Directory.Events:WaitForChild("EmoteSound")
 Directory.ToggleAFKEvent = Directory.Events:WaitForChild("ToggleAFKEvent")
 Directory.DisableClick = Directory.Events:WaitForChild("disableClick")
 Directory.UpdateInventory = Directory.Events:WaitForChild("UpdateInventory")
+Directory.CaseOpen = Directory.Events:WaitForChild("CaseOpen")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

@@ -11,14 +11,14 @@ local RARITY_COLORS = {
 ------------------------------------------
 
 local function PlayEmoteInViewport(viewport, emoteID)
-	local worldModel = viewport:FindFirstChildOfClass("WorldModel")
+	local worldModel = viewport:WaitForChild("WorldModel")
 	if not worldModel then return end
 
-	local rig = worldModel:FindFirstChild("Rig")
+	local rig = worldModel:WaitForChild("Rig")
 	if not rig then return end
 
-	local humanoid = rig:FindFirstChildOfClass("Humanoid")
-	local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+	local humanoid = rig:WaitForChild("Humanoid")
+	local animator = humanoid and humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator")
 
 	if animator then
 		-- Use task.defer to run this at the end of the frame
@@ -45,7 +45,7 @@ local function PlayEmoteInViewport(viewport, emoteID)
 	viewport.CurrentCamera = cam
 	cam.Parent = viewport
 
-	local root = rig:FindFirstChild("HumanoidRootPart") or rig:FindFirstChild("UpperTorso")
+	local root = rig:WaitForChild("HumanoidRootPart") or rig:WaitForChild("UpperTorso")
 	if root then
 		-- INCREASE the 4 to 7 or 8 to move the camera further back
 		-- INCREASE the 1.5 to 2 to look slightly more "down" on the character
@@ -57,7 +57,7 @@ local function PlayEmoteInViewport(viewport, emoteID)
 end
 
 local function CloneTemplate(parentFrame, itemsList)
-	local template = parentFrame:FindFirstChild("EmoteTemplate")
+	local template = parentFrame:WaitForChild("EmoteTemplate")
 	if not template or not itemsList then return end
 	template.Visible = false 
 
@@ -81,8 +81,8 @@ local function CloneTemplate(parentFrame, itemsList)
 		clone.Parent = parentFrame
 		clone.Visible = true
 
-		local emoteNameLabel = clone:FindFirstChild("EmoteName")
-		local rarityLabel = clone:FindFirstChild("Rarity")
+		local emoteNameLabel = clone:WaitForChild("EmoteName")
+		local rarityLabel = clone:WaitForChild("Rarity")
 
 		-- Get the color based on rarity
 		local rarityColor = RARITY_COLORS[data.RarityName] or Color3.new(1, 1, 1)

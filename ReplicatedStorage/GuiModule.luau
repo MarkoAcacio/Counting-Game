@@ -282,7 +282,7 @@ HandleButtonUI = function(CountButton, ButtonFrame, finalStandButton, Action : s
 	if clicked then return end
 
 	TweenUtils:TweenButton(CountButton)
-	local CountText = CountButton:FindFirstChild("Text")
+	local CountText = CountButton:WaitForChild("Text")
 
 	ButtonFrame.Visible = true
 
@@ -324,7 +324,7 @@ end
 
 HandleCaseChestUI = function(cooldown)
 	for _, model in pairs(ChestCasesFolder:GetChildren()) do
-		if model:IsA("Model") then
+		if model:IsA("Model") and model.Name ~= "Pod" then
 			local meshPart = model:FindFirstChild("Mesh")
 			if meshPart then
 				HandleCaseChestName(model.Name, meshPart,cooldown)
@@ -394,7 +394,7 @@ function GuiModule:IntroAnim(ScreenGui : ScreenGui)
 	local ModeFrame = ScreenGui:WaitForChild("ModeFrame")
 	local FrameContainer = ModeFrame:WaitForChild("FrameContainer")
 	local DescriptionFolder = FrameContainer:WaitForChild("Description")
-	local UITable = {FrameContainer:WaitForChild("ModeName"), DescriptionFolder:WaitForChild("D1"), DescriptionFolder:WaitForChild("D2"), DescriptionFolder:WaitForChild("D3")}
+	local UITable = {FrameContainer:FindFirstChild("ModeName"), DescriptionFolder:FindFirstChild("D1"), DescriptionFolder:FindFirstChild("D2"), DescriptionFolder:FindFirstChild("D3")}
 
 	local T_INFO = TweenInfo.new(1.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local SHRINK_INFO = TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)

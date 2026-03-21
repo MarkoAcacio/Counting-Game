@@ -449,8 +449,6 @@ function PlayerModule:KillPlayer(player)
 	humanoid:ChangeState(Enum.HumanoidStateType.Dead)
 	humanoid.Health = 0
 
-	-- Backup: If humanoid doesn't die properly, force respawn
-	task.wait(0.5)
 	if humanoid.Health > 0 then
 		player.Character:BreakJoints()
 	end
