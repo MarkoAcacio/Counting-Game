@@ -367,6 +367,11 @@ end
 
 function GachaUI.ResetUI(gachaFrame : Frame, ContainerFrame : Frame, ProximityPrompt)
 
+	if not ContainerFrame or not ContainerFrame.Parent then
+		GachaUI.Spinning = false
+		return
+	end
+
 	-- Re-enable the ProximityPrompt
 	if ProximityPrompt then
 		ProximityPrompt.Enabled = true

@@ -49,6 +49,20 @@ PlayerModule.AFKPlayers = {}
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
+local ragdollCreationInProgress = {} -- Track which players are currently creating ragdolls
+
+local function cleanupRagdoll(player)
+	-- Cancel any in-progress ragdoll creation
+	ragdollCreationInProgress[player] = false
+
+	-- Remove any ragdolls belonging to this player
+	for _, ragdoll in pairs(RagdollFolder:GetChildren()) do
+		if ragdoll:GetAttribute("OwnerUserId") == player.UserId or ragdoll.Name:match(player.Name .. "_Ragdoll") then
+			ragdoll:Destroy()
+		end
+	end
+end
+
 local function giveBadge(player)
 	task.spawn(function()
 		local badgeID = 1181315207241209
@@ -69,14 +83,6 @@ local function giveBadge(player)
 	end)
 end
 
-local function cleanupRagdoll(player)
-	-- Remove any ragdolls belonging to this player
-	for _, ragdoll in pairs(RagdollFolder:GetChildren()) do
-		if ragdoll:GetAttribute("OwnerUserId") == player.UserId or ragdoll.Name:match(player.Name .. "_Ragdoll") then
-			ragdoll:Destroy()
-		end
-	end
-end
 
 function PlayerModule:Init()
 
@@ -89,6 +95,8 @@ function PlayerModule:Init()
 
 	PlayerService.PlayerRemoving:Connect(function(player)
 		self.AFKPlayers[player] = nil
+		ragdollCreationInProgress[player] = nil -- Clean up tracking
+		cleanupRagdoll(player) -- Clean up any remaining ragdolls
 	end)
 
 	PlayerService.PlayerAdded:Connect(function(player)
@@ -168,13 +176,14 @@ function PlayerModule:Init()
 					self.Players[player].isPlaying = false
 
 					if playerCharacter and playerCharacter.Parent == workspace then
+						ragdollCreationInProgress[player] = true
 						RagdollModule:SetupRagdoll(player, playerCharacter, hum)
 					end
 				end
 
 				-- CRITICAL: Schedule respawn after ragdoll animation
 				task.spawn(function()
-					task.wait(3.5) -- Wait for ragdoll/death animation to complete
+					task.wait(4	) -- Wait for ragdoll/death animation to complete
 
 					-- Verify player still exists and needs respawn
 					if player and player.Parent and player.Character == playerCharacter then

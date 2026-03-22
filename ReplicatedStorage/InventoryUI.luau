@@ -729,7 +729,7 @@ function InventoryUI:UpdateInventory()
 	-- ✅ FIX: Only reconnect buttons if NEW items were added
 	if newlyAdded then
 		self:clearButtonConn() -- Clear old connections first
-		self:_Buttons() -- Only reconnect the NEW buttons
+		self:LoadButtons()
 		self:RequestEquippedItems() -- Update equipped status for new items
 	end
 end

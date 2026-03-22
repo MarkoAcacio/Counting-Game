@@ -5,29 +5,48 @@ local Ragdoll = {}
 
 -- RAGDOLL will only play if it's first set to false. 
 
-function Ragdoll:SetupRagdoll(Player : Player, Character, Humanoid:Humanoid)
-	
+function Ragdoll:SetupRagdoll(Player : Player, Character, Humanoid:Humanoid, creationTracker)
+
 	if Character ~= nil then
-		self:ConvertJoints(Player,Character, Humanoid)
+		self:ConvertJoints(Player, Character, Humanoid)
 		Character:SetAttribute("Ragdolled", true)
 
 		if Character:GetAttribute("canClone") == true then
 			task.wait(2)
+
+			-- CHECK: If cleanup happened during the wait, abort
+			if creationTracker and creationTracker[Player] == false then
+				print("Ragdoll clone cancelled for", Player.Name)
+				return
+			end
+
+			-- Also verify character still exists and hasn't been replaced
+			if not Character.Parent or Player.Character ~= Character then
+				print("Character no longer valid, aborting ragdoll clone")
+				return
+			end
+
 			Character.Archivable = true
 			local ClonedCharacter = Character:Clone()
 			local clonedHumanoid = ClonedCharacter:FindFirstChildOfClass("Humanoid")
+
+			-- Tag the clone with owner info for easier cleanup
+			ClonedCharacter:SetAttribute("OwnerUserId", Player.UserId)
+			ClonedCharacter.Name = Player.Name .. "_Ragdoll"
+
 			ClonedCharacter.Parent = workspace.Ragdolls
 			ClonedCharacter.HumanoidRootPart.Anchored = true
 			clonedHumanoid.Health = 0
 			clonedHumanoid.MaxHealth = 0
 			clonedHumanoid:ChangeState(Enum.HumanoidStateType.Dead)
-
-
 			Character.Archivable = false
+
+			-- Mark creation as complete
+			if creationTracker then
+				creationTracker[Player] = false
+			end
 		end
 	end
-	
-	
 end
 
 ------------------------------------------------------------------------------------------------------------------------
