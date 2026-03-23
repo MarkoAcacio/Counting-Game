@@ -6,9 +6,11 @@ local conn = {}
 
 local EmoteConfigs = {
 	["LowCortisol"] = {start = 31, stop = 47.5, fade = 1.5},
-	["67"] = {start = 0., stop = 2, fade = 0.5},
+	["67"] = {start = 1.3, stop = 3, fade = 0.5},
 	["Default"] = {start = 0, stop = 15, fade = 1.2} 
 }
+
+local nonLoopedEmotes = {"Yay"}
 
 -- Track active loops per player
 local activeLoops = {}
@@ -84,21 +86,37 @@ local function playLoopSection(soundTemplate, parent, startTime, endTime, fadeTi
 		sound.Name = "EmoteSound"
 		sound.Parent = parent
 		sound.TimePosition = startTime
-		sound.Volume = 0
+		
+		local shouldLoop = not table.find(nonLoopedEmotes, soundTemplate.Name)
+		if shouldLoop then
+			sound.Volume = 0
+		else
+			sound.Volume = 1
+		end
+		sound.RollOffMinDistance = 20
 		sound.RollOffMaxDistance = 100
 		sound.RollOffMode = Enum.RollOffMode.Linear
+		
+		print("Playing Sound: " .. soundTemplate.Name)
 		sound:Play()
 
-		d.TweenService:Create(sound, TweenInfo.new(fadeTime), {Volume = 0.5}):Play()
+		d.TweenService:Create(sound, TweenInfo.new(fadeTime), {Volume = 1}):Play()
 
 		task.delay(endTime - startTime - fadeTime, function()
+			
+			
 			-- Check if still active before looping
-			if sound and sound.Parent == parent and activeLoops[player] then
+			if sound and sound.Parent == parent and activeLoops[player] and shouldLoop then
 				createAndFade()
 				local outTween = d.TweenService:Create(sound, TweenInfo.new(fadeTime), {Volume = 0})
 				outTween:Play()
 				outTween.Completed:Wait()
 				sound:Destroy()
+				
+			else
+				task.wait(fadeTime) 
+				if sound then sound:Destroy() end
+				activeLoops[player] = false
 			end
 		end)
 	end
@@ -181,7 +199,9 @@ local function AddParticles(player : Player, Name, Action : boolean)
 	local PT = {["Menacing"] = PF:FindFirstChild("Menacing")}
 	local Head = player.Character:WaitForChild("Head")
 	
-	if Action  then
+	if not PT[_Name] then return end
+	
+	if Action then
 		for key, obj in pairs(PT) do
 			if key == _Name then
 				local C = obj:Clone()
@@ -225,6 +245,7 @@ function GlobalMusic:PlayMusic(hrp, musicType : string, player)
 		d.EmoteSound:FireAllClients(hrp, soundTemplate)
 		AddParticles(player, musicType, true)
 	
+		print("Attempting to play " .. musicType)
 
 		-- Setup detection
 		setupStateDetection(player, hrp)
