@@ -542,6 +542,7 @@ function RoundSystem:CelebrateWinners(roundStatus)
 	self.CelebrateWinnersActive = true
 	local Timer = WinTimer or 10
 	local winners = PlayerModule:GetAlivePlayers() -- These are the people currently winning
+	GameModule:StopAllCountAnimations()
 	
 	PlayerModule:RagdollAction("delete")
 
@@ -566,7 +567,7 @@ function RoundSystem:CelebrateWinners(roundStatus)
 	
 	if roundStatus == 1 then
 		winners = PlayerModule:GetAlivePlayers()
-		HandleWinnerRewards()
+		HandlWinnerRewards()
 		
 	elseif roundStatus == 2 then
 		winners = PlayerModule:GetAlivePlayers()

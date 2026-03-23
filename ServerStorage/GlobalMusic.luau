@@ -11,6 +11,7 @@ local EmoteConfigs = {
 }
 
 local nonLoopedEmotes = {"Yay"}
+local loopedCount = {"Menacing"}
 
 -- Track active loops per player
 local activeLoops = {}
@@ -199,7 +200,15 @@ local function AddParticles(player : Player, Name, Action : boolean)
 	local PT = {["Menacing"] = PF:FindFirstChild("Menacing")}
 	local Head = player.Character:WaitForChild("Head")
 	
-	if not PT[_Name] then return end
+	if not PT[_Name] and not Action then 
+		for _, obj in pairs(Head:GetChildren()) do
+			if obj:IsA("ParticleEmitter") then
+				obj:Destroy()
+				break
+			end
+		end
+		return
+	end
 	
 	if Action then
 		for key, obj in pairs(PT) do
@@ -248,7 +257,9 @@ function GlobalMusic:PlayMusic(hrp, musicType : string, player)
 		print("Attempting to play " .. musicType)
 
 		-- Setup detection
-		setupStateDetection(player, hrp)
+		if not table.find(loopedCount, musicType) then
+			setupStateDetection(player, hrp)
+		end
 
 		-- Get config
 		local config = EmoteConfigs[musicType] or EmoteConfigs["Default"]
@@ -264,7 +275,7 @@ function GlobalMusic:PlayDeathSFX(hrp, musicType : string, player)
 	-- Stop any existing music
 	stopPlayerMusic(hrp)
 
-	if musicType == "STOP" then return end
+	if musicType == "STOP" then AddParticles(player, musicType, false) return end
 
 	-- Find the sound
 	local soundTemplate = DeathMusicFolder:FindFirstChild(musicType)

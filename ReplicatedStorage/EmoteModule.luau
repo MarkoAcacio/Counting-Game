@@ -238,10 +238,17 @@ end
 
 
 function EmoteModule:StopAllCountAnimations(countName)
-	countLock = true -- Block new tracks immediately
+	print("Cleaning up tracks... countLock:", countLock)
+	-- countlock = true 
+	-- FIX: Don't let countLock block cleanup - always allow stopping
+	-- countLock = true  -- Remove this line from here
 
-	print("Cleaning up tracks...")
-	d.MusicEvent:FireServer(countName, "stop")
+	-- FIX: Only fire if countName exists
+	if countName then
+		d.MusicEvent:FireServer(countName, "stop")
+	else
+		d.MusicEvent:FireServer("STOP", "stop")  -- Send default STOP command
+	end
 
 	for id, track in pairs(countTrackCache) do
 		if track then
@@ -258,12 +265,14 @@ function EmoteModule:StopAllCountAnimations(countName)
 		currentCountAnim = nil
 	end
 
+	-- NOW set countLock AFTER cleanup is done
+	countLock = true
+
 	-- Wait for the round transition to finish before allowing animations again
 	task.delay(1.5, function()
 		countLock = false
 	end)
 end
-
 
 
 function EmoteModule:PlayDeathAnimation(animator, animationID, deadChar)

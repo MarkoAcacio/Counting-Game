@@ -84,6 +84,7 @@ end
 GameModule.CanAnimate = true
 local clickWindowActive = false
 local clickWindowStart = nil
+GameModule.playerAnimated = {}
 
 function GameModule:OnClick(player, data, roundType)
 
@@ -123,9 +124,9 @@ function GameModule:OnClick(player, data, roundType)
 			local inventory = DataManager.GetPlayerInventory(player)
 			local countData = inventory and inventory.Counts and inventory.Counts[equippedCountName]
 
-			if countData and countData.ID and self.CanAnimate then
-				d.CountEvent:FireAllClients(player.Character, countData.ID)
-				self.CanAnimate = false
+			if countData and countData.ID and not self.playerAnimated[player] then
+				d.CountEvent:FireAllClients(player.Character, countData.ID, equippedCountName)
+				self.playerAnimated[player] = true
 			end
 		end
 
@@ -428,8 +429,10 @@ function GameModule:ResetRound()
 	self.numberCount = 0
 	self.EliminatedPlayers = {}
 	self.finalStandClicks = {}
+	self.playerAnimated = {}
 	GameModule:DeleteCountUI()
 	GameModule:StopAllCountAnimations() -- NEW: Stop animations
+	self.CanAnimate = true
 	clickWindowStart = nil
 	clickWindowActive = false
 
@@ -453,9 +456,11 @@ function GameModule:ResetGame()
 	self.EliminatedPlayers = {}
 	GameModule:DeleteCountUI()
 	self.finalStandClicks = {}
+	self.playerAnimated = {}
 	GameModule:StopAllCountAnimations() -- NEW: Stop animations
 	clickWindowStart = nil
 	clickWindowActive = false
+	self.CanAnimate = true
 
 	task.wait(0.5)
 
