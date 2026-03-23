@@ -47,7 +47,8 @@ local UiText = {
 	Intermission = "Intermission: ",
 	InRound = "Time Left: ",
 	Eliminated = "Players Eliminated: ",
-	Win = "🎊 Winners : ",
+	Win = "Winner : ",
+	Draw = "Draw! : ",
 	NewInRound = "New Round Starting: ",
 	LoadingRound = "Loading...",
 	LastStand = "Last Stand! CLICK AS FAST AS YOU CAN : " ,
@@ -234,11 +235,12 @@ HandleRoundUI = function(RoundData, PlayersData)
 	elseif RoundData.State == 5 then
 
 		local names = {}
-		for _, player in pairs(RoundData.winners) do
-			table.insert(names, player.Name)
+		
+		if #RoundData.winners > 1 then
+			RoundLabel.Text = UiText.Draw .. RoundData.Time
+		elseif #RoundData.winners == 1 then
+			RoundLabel.Text = UiText.Win .. RoundData.winners[1].Name .. "!"
 		end
-
-		RoundLabel.Text = UiText.Win .. table.concat(names, ", ")
 
 		ButtonFrame.Visible = false
 	elseif RoundData.State == 6 then

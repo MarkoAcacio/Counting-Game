@@ -202,6 +202,11 @@ end
 
 
 function GlobalMusic:PlayMusic(hrp, musicType : string, player)
+	if not hrp or not hrp.Parent then 
+		warn("GlobalMusic: HRP missing for " .. player.Name)
+		return 
+	end
+	
 	local EmoteMusicFolder = d.MusicFolder:WaitForChild("EmoteMusic")
 
 	-- Stop any existing music
@@ -282,8 +287,8 @@ function GlobalMusic:PlayClick(p : Player)
 	local sound = ClickSound:Clone()
 	sound.Name = "ClickSound_" .. tick() -- Unique name to prevent conflicts
 	sound.Parent = hrp
-	sound.Volume = 1.2
-	sound.RollOffMinDistance = 20
+	sound.Volume = 1.5
+	sound.RollOffMinDistance = 25
 	sound.RollOffMaxDistance = 100
 	sound.PlaybackSpeed = 0.9 + self.ClickPlayback
 	sound.Looped = false
@@ -311,8 +316,8 @@ function GlobalMusic:PlayElimClick(p : Player)
 	local sound = ClickSound:Clone()
 	sound.Name = "ElimSound_" .. tick() -- Unique name to prevent conflicts
 	sound.Parent = hrp
-	sound.Volume = 1.2
-	sound.RollOffMinDistance = 20
+	sound.Volume = 1.4
+	sound.RollOffMinDistance = 25
 	sound.RollOffMaxDistance = 100
 	sound.PlaybackSpeed = 1
 	sound.Looped = false
@@ -349,8 +354,8 @@ function GlobalMusic:PlayFinalStandClick(p : Player)
 	local sound = ClickSound:Clone()
 	sound.Name = "FinalStandClick_" .. tick() -- Unique name to prevent conflicts
 	sound.Parent = hrp
-	sound.Volume = 1.2
-	sound.RollOffMinDistance = 20
+	sound.Volume = 1.4
+	sound.RollOffMinDistance = 25
 	sound.RollOffMaxDistance = 100
 	
 	if self.FinalStandPlayback[p] <= 2 then

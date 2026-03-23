@@ -139,14 +139,20 @@ local function clearMap()
 end
 
 local function DistributeReward(winningPlayers)
-	if winningPlayers then
+	
+	if #winningPlayers > 1 then
 		for _, player in ipairs(winningPlayers) do
-			DataManager.AddWins(player, 1)
-			DataManager.AddCoins(player, 200)
+			DataManager.AddCoins(player, 50)
 			DataManager.SendCurrencies(player)
 			d.SFXEvent:FireClient(player, "Coin")
 		end
-		return {}
+	elseif #winningPlayers == 1 then
+		local winner = winningPlayers[1]
+
+		DataManager.AddWins(winner, 1)
+		DataManager.AddCoins(winner, 200)
+		DataManager.SendCurrencies(winner)
+		d.SFXEvent:FireClient(winner, "Coin")	
 	end
 end
 
@@ -182,7 +188,9 @@ function RoundSystem:StartGame()
 	self:PromptGroupJoin()
 	playMusic("Music", "BGM")
 	
-	self.WinningPlayers = DistributeReward(self.WinningPlayers)
+	DistributeReward(self.WinningPlayers)
+	self.WinningPlayers = {}
+	
 	clearMap()
 	
 	for _, player in ipairs(d.PlayerService:GetPlayers()) do
@@ -520,6 +528,7 @@ function RoundSystem:CelebrateWinners(roundStatus)
 		
 	elseif roundStatus == 2 then
 		winners = PlayerModule:GetAlivePlayers()
+		print(winners)
 		HandleWinnerRewards()
 	end
 	
