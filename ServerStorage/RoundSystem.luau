@@ -100,19 +100,40 @@ local function afkState(alivePlayers, bool : boolean)
 end
 
 local function HandleWinnerRewards()
-	for _, player in ipairs(PlayerModule:GetAlivePlayers()) do
+	
+	local winners = PlayerModule:GetAlivePlayers()
+	
+	if #winners > 1 then
+		for _, player in ipairs(winners) do
+			player.Character:scaleTo(4)
+
+			d.SFXEvent:FireClient(player, "WinSFX")
+			d.MusicEvent:FireClient(player, "Winner")
+
+			table.insert(RoundSystem.WinningPlayers, player)
+
+			local highlight = Instance.new("Highlight")
+			highlight.FillColor = Color3.fromRGB(157, 152, 152)
+			highlight.FillTransparency = 0.7
+			highlight.Parent = player.Character
+		end
+	elseif #winners == 1 then
+		local winner = winners[1]
 		
-		player.Character:scaleTo(4)
-		
-		d.SFXEvent:FireClient(player, "WinSFX")
-		d.MusicEvent:FireClient(player, "Winner")
-		
-		table.insert(RoundSystem.WinningPlayers, player)
+		winner.Character:scaleTo(4)
+
+		d.SFXEvent:FireClient(winner, "WinSFX")
+		d.MusicEvent:FireClient(winner, "Winner")
+
+		table.insert(RoundSystem.WinningPlayers, winner)
 
 		local highlight = Instance.new("Highlight")
 		highlight.FillColor = Color3.fromRGB(255, 213, 44)
 		highlight.FillTransparency = 0.7
-		highlight.Parent = player.Character
+		highlight.Parent = winner.Character
+		
+	else
+		warn("No Winners Found | RoundSystem 136 ")
 	end
 end
 
