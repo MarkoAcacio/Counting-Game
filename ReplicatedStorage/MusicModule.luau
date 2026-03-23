@@ -11,8 +11,12 @@ local music
 local sfx
 
 local isMuted = false
+local isEmotesMuted = false -- NEW: Track emote mute state
 
 local activeEmotes = {}
+
+local activeSounds = {} -- Store sounds by HRP: {[hrp] = {sound1, sound2}}
+local mutedPlayers = {} -- Store muted player UserIds: {[userId] = true}
 
 ------------------------------------------------------------------------------------------------------------------
 
@@ -81,6 +85,20 @@ function MusicModule:Init()
 	
 end
 
+function MusicModule:ToggleMuteEmotes()
+	isEmotesMuted = not isEmotesMuted
+
+	-- Control the SoundGroup volume (this affects ALL sounds in that group)
+	local emoteSoundGroup = game:GetService("SoundService"):FindFirstChild("EmoteSounds")
+	if emoteSoundGroup then
+		emoteSoundGroup.Volume = isEmotesMuted and 0 or 1
+		print("Emotes muted:", isEmotesMuted)
+	else
+		warn("EmoteSounds SoundGroup not found in SoundService!")
+	end
+
+	return isEmotesMuted
+end
 
 
 function MusicModule:ToggleMute()
@@ -225,9 +243,12 @@ local function playLoopSection(soundTemplate, parent, startTime, endTime, fadeTi
 		sound.Parent = parent
 		sound.TimePosition = startTime
 		sound.Volume = 0
+		sound.RollOffMinDistance = 20
 		sound.RollOffMaxDistance = 100
 		sound.RollOffMode = Enum.RollOffMode.Linear
 		sound:Play()
+
+		table.insert(activeSounds[parent], sound)
 
 		d.TweenService:Create(sound, TweenInfo.new(fadeTime), {Volume = 0.5}):Play()
 

@@ -59,6 +59,7 @@ Directory.ToggleAFKEvent = Directory.Events:WaitForChild("ToggleAFKEvent")
 Directory.DisableClick = Directory.Events:WaitForChild("disableClick")
 Directory.UpdateInventory = Directory.Events:WaitForChild("UpdateInventory")
 Directory.CaseOpen = Directory.Events:WaitForChild("CaseOpen")
+Directory.MuteEmotes = Directory.Events:WaitForChild("MuteEmotes")
 
 Directory.VerifyEvent = Directory.Events:WaitForChild("VerifyEvent")  -- Verifies Item Ownership
 Directory.InventoryEvent = Directory.Events:WaitForChild("InventoryEvent") -- Sends Inventory Data

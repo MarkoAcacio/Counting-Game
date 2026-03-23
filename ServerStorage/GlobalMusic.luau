@@ -88,13 +88,18 @@ local function playLoopSection(soundTemplate, parent, startTime, endTime, fadeTi
 		sound.Parent = parent
 		sound.TimePosition = startTime
 		
+		local emoteSoundGroup = game:GetService("SoundService"):FindFirstChild("EmoteSounds")
+		if emoteSoundGroup then
+			sound.SoundGroup = emoteSoundGroup
+		end
+		
 		local shouldLoop = not table.find(nonLoopedEmotes, soundTemplate.Name)
 		if shouldLoop then
 			sound.Volume = 0
 		else
 			sound.Volume = 1
 		end
-		sound.RollOffMinDistance = 20
+		sound.RollOffMinDistance = 10
 		sound.RollOffMaxDistance = 100
 		sound.RollOffMode = Enum.RollOffMode.Linear
 		
@@ -179,6 +184,11 @@ function GlobalMusic:Init()
 			GlobalMusic:PlayMusic(hrp, "STOP", player)
 		end
 	end)
+	
+	d.MuteEmotes.OnServerEvent:Connect(function(Action : boolean)
+		
+	end)
+	
 
 	-- Clean up when player leaves
 	game.Players.PlayerRemoving:Connect(function(player)

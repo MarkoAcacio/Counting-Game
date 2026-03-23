@@ -567,7 +567,7 @@ function RoundSystem:CelebrateWinners(roundStatus)
 	
 	if roundStatus == 1 then
 		winners = PlayerModule:GetAlivePlayers()
-		HandlWinnerRewards()
+		HandleWinnerRewards()
 		
 	elseif roundStatus == 2 then
 		winners = PlayerModule:GetAlivePlayers()
