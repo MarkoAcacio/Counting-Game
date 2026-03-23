@@ -160,6 +160,8 @@ d.localPlayer.CharacterAdded:Connect(function()
 	local playerGui = d.localPlayer:WaitForChild("PlayerGui")
 	local ui = playerGui:WaitForChild("UI")
 	local screenGui = ui:WaitForChild("ScreenGui")
+	
+	d.Lighting.Blur.Enabled = false
 
 	cd = -1
 	initialized = false
