@@ -624,6 +624,8 @@ function RoundSystem:FinalStand()
 	self.FinalStandActive = true 
 	local Timer = 20 
 	local AlivePlayers
+	
+	GameModule:PrepareFinalStand()
 
 	PlayerModule:RagdollAction("delete")
 
@@ -661,6 +663,29 @@ function RoundSystem:FinalStand()
 
 		-- 3. FINAL VALIDATION: Check again after loop ends
 		local finalAlive = PlayerModule:GetAlivePlayers()
+
+
+		-- CHECK HERE IF PLAYER COUNT IS 0 THEN ELIMINATE.
+		
+		local someoneEliminated = false
+		
+		for player, data in pairs(GameModule.finalStandClicks) do
+			print(player, data)
+			if data.count == 0 then
+				local sessionData = PlayerModule.Players[player]
+				if sessionData and sessionData.Alive then
+					print(player.Name .. " eliminated for 0 clicks!")
+					sessionData.Alive = false
+					sessionData.Counted = true -- Mark as 'processed'
+					someoneEliminated = true
+				end
+			end
+		end
+		
+		if someoneEliminated then
+			PlayerModule:EliminatePlayers()
+		end
+
 
 		if #finalAlive == 1 then
 			-- Only one person survived the clicking madness or everyone else reset/left

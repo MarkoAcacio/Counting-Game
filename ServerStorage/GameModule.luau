@@ -302,6 +302,17 @@ function GameModule:eliminatePlayers(toEliminate)
 	end
 end
 
+function GameModule:PrepareFinalStand()
+	self.finalStandClicks = {} -- Clear old data
+	for _, player in ipairs(PlayerModule:GetAlivePlayers()) do
+		-- Register every alive player with 0 clicks
+		self.finalStandClicks[player] = {
+			count = 0
+		}
+	end
+	print("Final Stand Table Initialized for survivors.")
+end
+
 function GameModule:updateCount(ButtonClick, player: Player, roundType : number)
 
 	if roundType == 1 and ButtonClick then  -- NORMAL ROUND
@@ -325,8 +336,8 @@ function GameModule:updateCount(ButtonClick, player: Player, roundType : number)
 		end
 
 		GlobalMusic:PlayFinalStandClick(player)
-
 		self.finalStandClicks[player].count += 1
+		
 		self:SetCountingUI(player, "inc", roundType)
 	end
 
