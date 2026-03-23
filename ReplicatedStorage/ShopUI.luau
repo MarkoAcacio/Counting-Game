@@ -481,17 +481,29 @@ end
 function ShopUI:CreatePlayerButton(plr, TemplateButton, PlayerList, listBG)
 	local newButton = TemplateButton:Clone()
 	newButton.Name                       = plr.Name
-	newButton.PlayerName.Text            = plr.Name
-	newButton.PlayerDisplayName.Text     = plr.DisplayName
 	newButton.Visible                    = true
 	newButton.Parent                     = PlayerList
+
+	-- Wait for critical children to exist before accessing them
+	local PlayerName = newButton:WaitForChild("PlayerName", 2)
+	local PlayerDisplayName = newButton:WaitForChild("PlayerDisplayName", 2)
+	local PlayerImage = newButton:WaitForChild("PlayerImage", 2)
+
+	if not PlayerName or not PlayerDisplayName or not PlayerImage then
+		warn("Failed to load player button UI for:", plr.Name)
+		newButton:Destroy()
+		return
+	end
+
+	PlayerName.Text = plr.Name
+	PlayerDisplayName.Text = plr.DisplayName
 
 	local success, thumbnailUrl = pcall(function()
 		return d.PlayerService:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
 	end)
 
 	if success then
-		newButton.PlayerImage.Image = thumbnailUrl
+		PlayerImage.Image = thumbnailUrl
 	end
 
 	local buttonChild = newButton:FindFirstChild("Button")

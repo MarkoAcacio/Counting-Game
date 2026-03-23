@@ -49,6 +49,7 @@ RoundSystem.isRoundMusicActive = false
 RoundSystem.WinningPlayers = {}
 RoundSystem.CanIntro = true
 RoundSystem.CurrentMap = nil
+RoundSystem.ParticipatingPlayers = {}  -- Gets data at start round of every game
 
 
 local decrementTime = 5
@@ -177,6 +178,16 @@ local function DistributeReward(winningPlayers)
 	end
 end
 
+local function RewardParticipatingPlayers(PT, winners)
+	for _, player in ipairs(PT) do
+		if not table.find(winners, player) then
+			DataManager.AddCoins(player, 50)
+			DataManager.SendCurrencies(player)
+			d.SFXEvent:FireClient(player, "Coin")	
+		end
+	end
+end
+
 
 function RoundSystem:PromptGroupJoin()
 	gameStartCount += 1
@@ -210,6 +221,8 @@ function RoundSystem:StartGame()
 	playMusic("Music", "BGM")
 	
 	DistributeReward(self.WinningPlayers)
+	RewardParticipatingPlayers(self.ParticipatingPlayers, self.WinningPlayers)
+	self.ParticipatingPlayers = {}
 	self.WinningPlayers = {}
 	
 	clearMap()
@@ -410,6 +423,7 @@ function RoundSystem:StartRound(isSurvive)
 	-- HANDLE RESET ETC.
 	
 		task.spawn(function()
+		self.ParticipatingPlayers = PlayerModule:GetAlivePlayers()
 			while Timer > 0 and self.RoundActive do
 				-- Update UI
 				-- Check if how many players survive, then fire round event again.
