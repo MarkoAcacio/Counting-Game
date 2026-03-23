@@ -220,6 +220,8 @@ function RoundSystem:StartGame()
 	self:PromptGroupJoin()
 	playMusic("Music", "BGM")
 	
+	local currentTotalPlayers = game.Players:GetPlayers()
+	
 	DistributeReward(self.WinningPlayers)
 	RewardParticipatingPlayers(self.ParticipatingPlayers, self.WinningPlayers)
 	self.ParticipatingPlayers = {}
@@ -227,7 +229,7 @@ function RoundSystem:StartGame()
 	
 	clearMap()
 	
-	for _, player in ipairs(d.PlayerService:GetPlayers()) do
+	for _, player in ipairs(currentTotalPlayers) do
 		d.ToggleAFKEvent:FireClient(player, true)
 	end
 	
