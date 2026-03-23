@@ -340,8 +340,15 @@ local function teleportPlayers(action, targetPlayers)
 	for _, player in ipairs(playersToMove) do
 		local character = player.Character
 		local hrp = character and character:FindFirstChild("HumanoidRootPart")
+		local humanoid = character and character:FindFirstChild("Humanoid")
 
 		if hrp then
+			
+			if humanoid.Sit then
+				humanoid.Sit = false
+				task.wait(0.1) -- Small delay to ensure they fully unseat
+			end
+			
 			hrp.Anchored = true
 
 			if action == 1 then
